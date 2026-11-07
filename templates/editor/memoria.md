@@ -1,0 +1,10 @@
+- B-roll com texto queimado no vídeo todo é descartado; card ou texto recortado não salva o clipe.
+- Tela cheia e canto: só B-roll vertical (Shorts/TikTok). Tela dividida aceita horizontal.
+- Biblioteca de B-roll primeiro; clipe usado em outro anúncio não volta; B-roll solto do computador só de pasta que o Daniel indicar.
+- B-roll gringo (termos em inglês, criadores dos EUA), com "aesthetic / raw / no text / cinematic" nos termos.
+- Legenda logo abaixo do pescoço do expert; no meio da tela na dividida e no canto.
+- VSL sem música. Prévia tem que ser igual ao vídeo final.
+- Corte: zero pausa entre palavras, um arquivo por anúncio, na ordem do roteiro, resolução original.
+- Depois que o Daniel mexeu na timeline do Atlas, nunca rodar `plano --forcar` (apaga o que ele fez).
+- Projetos do Atlas em ~/Edições/<nome>; B-rolls em ~/Octo Edição/B-rolls/<workspace>/<Expert>/<Oferta>/<Categoria>/.
+- YouTube: baixar um Short de cada vez com pausa; em paralelo ele bloqueia ("Sign in to confirm you're not a bot").

@@ -1,0 +1,22 @@
+{
+  "name": "claude-flow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bots persistentes do Claude Code CLI organizados em squads, com memória, conectores, navegador próprio e app de celular (PWA).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "check": "node --disable-warning=ExperimentalWarning scripts/check.js",
+    "editor:instalar": "node scripts/instalar-editor.js",
+    "navegador:instalar": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "@playwright/mcp": "0.0.84",
+    "cross-spawn": "7.0.6",
+    "web-push": "3.6.7"
+  }
+}

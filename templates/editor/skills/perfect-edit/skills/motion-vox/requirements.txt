@@ -1,0 +1,3 @@
+# motion-vox: composição e recorte (roda na .venv da Perfect Edit, que já tem faster-whisper e numpy)
+Pillow
+opencv-python

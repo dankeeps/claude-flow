@@ -1,0 +1,135 @@
+{
+  "_leia": "Catálogo de conectores do Claude Flow. tipo: claudeai (já vem da sua conta claude.ai, sem configurar), stdio (programa local), http (servidor remoto), navegador (o Chrome do Claude Flow), atlas (o editor, só status). ${NOME} nos campos é trocado pela chave salva em Conectores > Chaves (~/ClaudeFlow/segredos.env).",
+  "conectores": [
+    {
+      "id": "gmail",
+      "nome": "Gmail",
+      "grupo": "Google",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Gmail",
+      "descricao": "Buscar e ler e-mails, criar rascunhos, etiquetas."
+    },
+    {
+      "id": "google-drive",
+      "nome": "Google Drive",
+      "grupo": "Google",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Google Drive",
+      "descricao": "Buscar, ler, criar e copiar arquivos do Drive."
+    },
+    {
+      "id": "google-docs",
+      "nome": "Google Docs",
+      "grupo": "Google",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Google Docs",
+      "descricao": "Ler e editar documentos (roteiros, copys, briefings)."
+    },
+    {
+      "id": "google-sheets",
+      "nome": "Google Sheets",
+      "grupo": "Google",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Google Sheets",
+      "descricao": "Ler e escrever planilhas (métricas, controle de anúncios)."
+    },
+    {
+      "id": "google-calendar",
+      "nome": "Google Agenda",
+      "grupo": "Google",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Google Calendar",
+      "descricao": "Ver e criar eventos."
+    },
+    {
+      "id": "notion",
+      "nome": "Notion",
+      "grupo": "Trabalho",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Notion",
+      "descricao": "Páginas, bancos de dados e notas."
+    },
+    {
+      "id": "meta-ads",
+      "nome": "Meta Ads",
+      "grupo": "Tráfego",
+      "tipo": "claudeai",
+      "servidor": "claude.ai Facebook",
+      "descricao": "Contas de anúncio, campanhas, criativos, métricas e Biblioteca de Anúncios."
+    },
+    {
+      "id": "higgsfield",
+      "nome": "Higgsfield",
+      "grupo": "Criação",
+      "tipo": "claudeai",
+      "servidor": "claude.ai higgsfield",
+      "descricao": "Geração de imagem e vídeo por IA."
+    },
+    {
+      "id": "navegador",
+      "nome": "Navegador do Claude Flow",
+      "grupo": "Claude Flow",
+      "tipo": "navegador",
+      "descricao": "Chrome próprio, com as contas que você logar nele: TikTok, YouTube, Biblioteca de Anúncios, qualquer site."
+    },
+    {
+      "id": "atlas",
+      "nome": "Atlas (Octo Edição)",
+      "grupo": "Claude Flow",
+      "tipo": "atlas",
+      "descricao": "O editor com timeline em localhost:4123. Não é instalado pelo Claude Flow: já está no computador. O Bot Editor entrega a edição nele."
+    },
+    {
+      "id": "apify",
+      "nome": "Apify",
+      "grupo": "Dados",
+      "tipo": "stdio",
+      "comando": "npx",
+      "args": ["-y", "@apify/actors-mcp-server"],
+      "env": { "APIFY_TOKEN": "${APIFY_TOKEN}" },
+      "segredos": [{ "nome": "APIFY_TOKEN", "rotulo": "Token da Apify", "ajuda": "console.apify.com > Settings > API & Integrations" }],
+      "descricao": "Atores da Apify (TikTok, Instagram, Biblioteca de Anúncios). Cobra por resultado."
+    },
+    {
+      "id": "github",
+      "nome": "GitHub",
+      "grupo": "Desenvolvimento",
+      "tipo": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" },
+      "segredos": [{ "nome": "GITHUB_TOKEN", "rotulo": "Token do GitHub", "ajuda": "github.com/settings/tokens (fine-grained, só os repositórios que o bot pode mexer)" }],
+      "descricao": "Repositórios, issues e pull requests (o gh no terminal continua funcionando sem isto)."
+    },
+    {
+      "id": "supabase",
+      "nome": "Supabase",
+      "grupo": "Desenvolvimento",
+      "tipo": "stdio",
+      "comando": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest"],
+      "env": { "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}" },
+      "segredos": [{ "nome": "SUPABASE_ACCESS_TOKEN", "rotulo": "Access token do Supabase", "ajuda": "supabase.com/dashboard/account/tokens" }],
+      "descricao": "Projetos de trackeamento: tabelas, SQL, funções."
+    },
+    {
+      "id": "vercel",
+      "nome": "Vercel",
+      "grupo": "Desenvolvimento",
+      "tipo": "http",
+      "url": "https://mcp.vercel.com",
+      "oauth": true,
+      "descricao": "Deploys e domínios das páginas. Pede login uma vez (veja docs/conectores.md)."
+    },
+    {
+      "id": "elevenlabs",
+      "nome": "ElevenLabs",
+      "grupo": "Criação",
+      "tipo": "stdio",
+      "comando": "uvx",
+      "args": ["elevenlabs-mcp"],
+      "env": { "ELEVENLABS_API_KEY": "${ELEVENLABS_API_KEY}" },
+      "segredos": [{ "nome": "ELEVENLABS_API_KEY", "rotulo": "Chave da ElevenLabs", "ajuda": "elevenlabs.io > Profile > API Keys" }],
+      "descricao": "Voz (texto para fala, vozes clonadas). Precisa do uv instalado."
+    }
+  ]
+}

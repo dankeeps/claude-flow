@@ -1,0 +1,72 @@
+{
+  "nome": "Bot Editor",
+  "descricao": "Edição de anúncio e VSL vertical: transcreve, corta, busca B-roll (YouTube Shorts / TikTok / biblioteca), monta no modelo do Atlas e entrega na timeline sem renderizar.",
+  "icone": "🎬",
+  "ordem": 10,
+  "modelo": "opus",
+  "esforco": "",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": ["navegador", "atlas", "google-drive", "google-docs"],
+  "pastas": ["~/Edições", "~/Octo Edição", "~/Downloads"],
+  "env": {
+    "PERFECT_EDIT_ATLAS": "{{atlas.dir}}",
+    "SHORTS_TRABALHO": "~/Edições/_shorts"
+  },
+  "preferencias": [
+    {
+      "chave": "fonteBroll",
+      "rotulo": "Fonte de B-roll",
+      "tipo": "escolha",
+      "opcoes": ["biblioteca + YouTube Shorts", "biblioteca + TikTok", "biblioteca + YouTube Shorts + TikTok", "só biblioteca"],
+      "padrao": "biblioteca + YouTube Shorts"
+    },
+    {
+      "chave": "estilo",
+      "rotulo": "Modelo de edição no Atlas",
+      "tipo": "escolha",
+      "opcoes": ["puro-dr", "edicao-vsl", "kellen", "ultradinamico-criativo", "ultradinamico-dr", "ultradinamico", "ugly"],
+      "padrao": "puro-dr"
+    },
+    {
+      "chave": "corte",
+      "rotulo": "Corte do bruto",
+      "tipo": "escolha",
+      "opcoes": ["timeline de corte no Atlas para eu aprovar", "cortar direto (sem aprovação)", "o vídeo já vem cortado"],
+      "padrao": "timeline de corte no Atlas para eu aprovar"
+    },
+    {
+      "chave": "densidade",
+      "rotulo": "B-rolls por minuto",
+      "tipo": "texto",
+      "padrao": "9 a 13 (no máximo 6 s sem B-roll)"
+    },
+    {
+      "chave": "sfx",
+      "rotulo": "Efeitos sonoros",
+      "tipo": "escolha",
+      "opcoes": ["sutil na entrada de cada B-roll (regras do modelo)", "só whoosh leve na troca de cena", "sem efeito sonoro"],
+      "padrao": "sutil na entrada de cada B-roll (regras do modelo)"
+    },
+    {
+      "chave": "legenda",
+      "rotulo": "Legenda",
+      "tipo": "texto",
+      "padrao": "logo abaixo do pescoço; no meio da tela na dividida e no canto"
+    },
+    {
+      "chave": "render",
+      "rotulo": "Renderizar",
+      "tipo": "escolha",
+      "opcoes": ["só quando eu pedir", "renderizar no fim de toda edição"],
+      "padrao": "só quando eu pedir"
+    },
+    {
+      "chave": "estudoGemini",
+      "rotulo": "Estudo dos B-rolls novos pelo Gemini",
+      "tipo": "escolha",
+      "opcoes": ["estudar só os clipes novos", "não estudar (eu olho as folhas de quadros)"],
+      "padrao": "estudar só os clipes novos"
+    }
+  ]
+}
