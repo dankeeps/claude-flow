@@ -6,9 +6,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
-import { spawn as spawnNode } from 'node:child_process';
+import { spawn as spawnNode, spawnSync } from 'node:child_process';
 import spawn from 'cross-spawn';
-import { IS_WIN, config, expandir, segredos } from './config.js';
+import { IS_WIN, REPO, HOME, config, expandir, segredos } from './config.js';
 import { bots, squads, salvarBot, dirBot } from './store.js';
 import * as db from './db.js';
 import * as mem from './memoria.js';
@@ -20,10 +20,78 @@ const filas = new Map(); // bot -> [itens]
 const ativos = new Map(); // bot -> { child, turno, item, inicio, sessao, parado }
 export let limiteUso = null; // último rate_limit_event do CLI (janela de 5 h da assinatura)
 
+// Ganchos que o index liga (evita importação circular com tarefas.js): turno que passou de 90 s vira cartão no
+// kanban; no fim do turno o cartão vai para Revisão com o resultado.
+export const ganchos = { turnoLongo: null, fimDoTurno: null };
+
+// ---------- fila guardada em disco ----------
+// Queda de energia, reinício do computador ou do servidor: a fila e o trabalho que estava rodando ficam em
+// ~/ClaudeFlow/fila.json e voltam quando o servidor liga de novo (o que estava rodando é retomado de onde parou).
+const ARQ_FILA = path.join(HOME, 'fila.json');
+const serial = ({ aguardar, ...resto }) => resto; // a espera de outro bot não sobrevive ao reinício
+let timerSalvar = null;
+export function salvarFilas() {
+  clearTimeout(timerSalvar);
+  timerSalvar = setTimeout(() => {
+    const dados = {};
+    for (const id of new Set([...filas.keys(), ...ativos.keys()])) {
+      const a = ativos.get(id);
+      const fila = (filas.get(id) || []).map(serial);
+      if (fila.length || a) dados[id] = { fila, ativo: a ? { item: serial(a.item), pid: a.child?.pid || null } : null };
+    }
+    try {
+      fs.writeFileSync(`${ARQ_FILA}.tmp`, JSON.stringify(dados));
+      fs.renameSync(`${ARQ_FILA}.tmp`, ARQ_FILA);
+    } catch (e) { console.error('[fila]', e.message); }
+  }, 200);
+}
+
+// Processo do claude que ficou órfão (servidor caiu com o turno rodando): encerra para não rodar em dobro.
+function matarOrfao(pid) {
+  if (!pid) return;
+  try {
+    if (IS_WIN) {
+      const r = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
+      if (/claude/i.test(r.stdout || '')) spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
+    } else {
+      const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+      if (/claude/i.test(cmd)) process.kill(pid, 'SIGTERM');
+    }
+  } catch {}
+}
+
+export function restaurarFilas() {
+  try { db.fecharTurnosAbertos(); } catch (e) { console.error('[turnos]', e.message); }
+  let dados = {};
+  try { dados = JSON.parse(fs.readFileSync(ARQ_FILA, 'utf8')); } catch { return; }
+  const retomados = [];
+  for (const [id, d] of Object.entries(dados)) {
+    const bot = bots.get(id);
+    if (!bot) continue;
+    const fila = [];
+    if (d.ativo?.item) {
+      matarOrfao(d.ativo.pid);
+      const it = { ...d.ativo.item, retomada: (d.ativo.item.retomada || 0) + 1 };
+      if (it.retomada > 2) {
+        emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'sistema', texto: 'O servidor reiniciou de novo no meio deste trabalho. Não retomei sozinho pela terceira vez: peça de novo quando quiser.' }));
+      } else {
+        fila.push(it);
+        retomados.push(bot.nome);
+        emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'sistema', texto: 'O servidor reiniciou (queda de energia, reinício do computador ou atualização) no meio deste trabalho. Retomando de onde parou.' }));
+      }
+    }
+    fila.push(...(d.fila || []));
+    if (fila.length) filas.set(id, [...fila, ...(filas.get(id) || [])]);
+  }
+  for (const id of filas.keys()) setImmediate(() => proximo(id));
+  salvarFilas();
+  if (retomados.length) notificar({ titulo: 'Claude Flow voltou', texto: `Retomando o trabalho de ${retomados.join(', ')} de onde parou.`, forcar: true }).catch(() => {});
+}
+
 let FLOW_URL = 'http://127.0.0.1:4400';
 export const definirUrl = (u) => { FLOW_URL = u; };
 
-function binClaude() {
+export function binClaude() {
   if (config.claudeBin) return expandir(config.claudeBin);
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
   return 'claude';
@@ -31,7 +99,63 @@ function binClaude() {
 
 export function estadoBot(bot) {
   const a = ativos.get(bot.id);
-  return { status: a ? 'trabalhando' : (filas.get(bot.id)?.length ? 'na fila' : bot.status === 'erro' ? 'erro' : 'ocioso'), fila: filas.get(bot.id)?.length || 0, desde: a?.inicio || null };
+  const pesadoDe = esperandoPesado.has(bot.id) ? bots.get(pesadoAtivo())?.nome || null : null;
+  const fila = filas.get(bot.id) || [];
+  return {
+    status: a ? 'trabalhando' : (fila.length ? 'na fila' : bot.status === 'erro' ? 'erro' : 'ocioso'), fila: fila.length, desde: a?.inicio || null,
+    esperandoPesado: pesadoDe, pausado: !!bot.pausado,
+    filaItens: fila.filter((it) => !it.especial).map((it) => ({ id: it.id, texto: String(it.texto || '').replace(/\s+/g, ' ').slice(0, 140), de: it.origem?.tipo === 'usuario' ? null : it.origem?.nome || it.origem?.tipo || null, criado: it.criado })),
+  };
+}
+
+// ---------- fila: pausar, retomar, cancelar, passar para a frente ----------
+export const itensNaFila = (botId) => filas.get(botId) || [];
+export function pausar(botId, pausado = true) {
+  const bot = bots.get(botId);
+  if (!bot) throw new Error('bot não encontrado');
+  bot.pausado = !!pausado;
+  salvarBot(bot);
+  emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'sistema', texto: pausado ? 'Fila pausada: o que está rodando termina, e as próximas mensagens esperam você retomar.' : 'Fila retomada.' }));
+  avisarEstado(bot);
+  if (!pausado) setImmediate(() => proximo(bot.id));
+  return estadoBot(bot);
+}
+export function cancelarItem(botId, itemId) {
+  const fila = filas.get(botId) || [];
+  const i = fila.findIndex((it) => it.id === itemId);
+  if (i < 0) throw new Error('essa mensagem já saiu da fila');
+  const [it] = fila.splice(i, 1);
+  salvarFilas();
+  it.aguardar?.resolve?.({ erro: 'o usuário tirou esta mensagem da fila' });
+  const bot = bots.get(botId);
+  emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'sistema', texto: `Tirado da fila: "${String(it.texto || '').replace(/\s+/g, ' ').slice(0, 80)}"` }));
+  avisarEstado(bot);
+  return estadoBot(bot);
+}
+export function passarNaFrente(botId, itemId) {
+  const fila = filas.get(botId) || [];
+  const i = fila.findIndex((it) => it.id === itemId);
+  if (i < 0) throw new Error('essa mensagem já saiu da fila');
+  const [it] = fila.splice(i, 1);
+  // compactação pendente continua na frente
+  const pos = fila.findIndex((x) => !x.especial);
+  fila.splice(pos < 0 ? fila.length : pos, 0, it);
+  salvarFilas();
+  const bot = bots.get(botId);
+  avisarEstado(bot);
+  return estadoBot(bot);
+}
+
+// Bots de trabalho pesado (edição, render, transcrição): um de cada vez no computador inteiro. Os outros esperam a
+// vez na fila; bots leves continuam normalmente. (Compactação de memória não conta como pesada.)
+const esperandoPesado = new Set();
+const ehPesado = (botId, item) => !!bots.get(botId)?.pesado && !item?.especial;
+function pesadoAtivo() {
+  for (const [id, a] of ativos) if (ehPesado(id, a.item)) return id;
+  return null;
+}
+function liberarPesados() {
+  for (const id of [...esperandoPesado]) { esperandoPesado.delete(id); setImmediate(() => proximo(id)); }
 }
 
 function avisarEstado(bot) {
@@ -45,19 +169,24 @@ export function enviar(botId, item) {
   const bot = bots.get(botId);
   if (!bot) throw new Error('bot não encontrado');
   const origem = item.origem || { tipo: 'usuario' };
+  item.id = crypto.randomBytes(5).toString('hex');
+  item.criado = Date.now();
   if (!item.especial) {
-    const papel = origem.tipo === 'usuario' ? 'usuario' : origem.tipo === 'bot' ? 'entrada' : 'sistema';
+    const papel = { usuario: 'usuario', bot: 'entrada', rotina: 'rotina' }[origem.tipo] || 'sistema';
     const msg = db.addMensagem({
-      bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel, de: origem.id || null, para: bot.id,
-      texto: item.texto, meta: { anexos: item.anexos || [], deNome: origem.nome || null, aguardar: !!item.aguardar },
+      bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel, de: origem.tipo === 'bot' ? origem.id || null : null, para: bot.id,
+      texto: item.texto, meta: { anexos: item.anexos || [], deNome: origem.nome || null, aguardar: !!item.aguardar, rotina: item.rotina || null, sala: item.sala || null },
     });
     emitir('msg', msg);
   }
   const fila = filas.get(bot.id) || [];
   if (item.frente) fila.unshift(item); else fila.push(item);
   filas.set(bot.id, fila);
-  avisarEstado(bot);
+  salvarFilas();
+  // Bot livre: começa logo em seguida, sem anunciar "na fila" (a fila só aparece quando já tem algo rodando).
+  // O setImmediate deixa a resposta do envio sair antes de abrir o processo do bot.
   if (!ativos.has(bot.id)) setImmediate(() => proximo(bot.id));
+  else avisarEstado(bot);
   return estadoBot(bot);
 }
 
@@ -66,6 +195,7 @@ export function parar(botId, { limparFila = false } = {}) {
   if (limparFila) {
     for (const it of filas.get(botId) || []) it.aguardar?.resolve?.({ erro: 'cancelado pelo usuário' });
     filas.set(botId, []);
+    salvarFilas();
   }
   if (!a) { const b = bots.get(botId); if (b) avisarEstado(b); return false; }
   a.parado = true;
@@ -85,6 +215,9 @@ function matarArvore(child) {
 function textoDoItem(item) {
   const o = item.origem || {};
   let t = String(item.texto || '');
+  if (item.retomada) t = `[Retomada: o servidor reiniciou no meio deste trabalho (queda de energia, reinício do computador ou atualização). A conversa até o último passo salvo continua nesta sessão. Antes de refazer qualquer coisa, confira o que já existe na pasta (downloads, transcrições, projetos) e continue de onde parou. Avise com mcp__flow__progresso que retomou.]\n${t}`;
+  if (o.tipo === 'rotina') t = `[Rotina "${o.nome}" — disparada sozinha, o usuário não está acompanhando agora. Faça o trabalho completo; se precisar de uma decisão dele, deixe a pergunta no fim. Ninguém responde a uma tela de login nesta hora: se cair numa, diga isso no resultado.]\n${t}`;
+  if (item.sala) t = `[Mensagem do usuário na sala do squad${item.salaOutros?.length ? `, enviada também para ${item.salaOutros.map((n) => '@' + n).join(', ')} (cada um dá a sua resposta)` : ''}. A sua resposta final aparece na sala.]\n${t}`;
   if (o.tipo === 'bot') {
     t = `[Mensagem de @${o.nome} — bot do seu squad${item.aguardar ? '. Ele está esperando: a sua resposta final deste turno volta automaticamente para ele' : ''}]\n${t}`;
   }
@@ -98,7 +231,24 @@ function textoDoItem(item) {
 async function proximo(botId) {
   if (ativos.has(botId)) return;
   const fila = filas.get(botId) || [];
+  // fila pausada: só a compactação de memória passa
+  if (bots.get(botId)?.pausado && !fila[0]?.especial) { const b = bots.get(botId); if (b) avisarEstado(b); return; }
+  if (fila.length && ehPesado(botId, fila[0])) {
+    const outro = pesadoAtivo();
+    if (outro && outro !== botId) {
+      if (!esperandoPesado.has(botId)) {
+        esperandoPesado.add(botId);
+        const b = bots.get(botId);
+        if (b) emitir('msg', db.addMensagem({ bot: b.id, squad: b.squad, sessao: b.sessao, papel: 'sistema', texto: `Esperando a vez: @${bots.get(outro)?.nome} está numa tarefa pesada. Começo assim que terminar.` }));
+      }
+      const b = bots.get(botId);
+      if (b) avisarEstado(b);
+      return;
+    }
+  }
+  esperandoPesado.delete(botId);
   const item = fila.shift();
+  salvarFilas();
   const bot = bots.get(botId);
   if (!item || !bot) { if (bot) avisarEstado(bot); return; }
   try {
@@ -110,9 +260,24 @@ async function proximo(botId) {
     item.aguardar?.resolve?.({ erro: e.message });
   } finally {
     ativos.delete(bot.id);
+    salvarFilas();
     avisarEstado(bot);
     setImmediate(() => proximo(bot.id));
+    if (ehPesado(bot.id, item)) liberarPesados();
   }
+}
+
+// Gancho que vale em todo turno, em qualquer autonomia: antes de qualquer exclusão, o usuário confirma no app.
+const GUARDA = path.join(REPO, 'server', 'hooks', 'guarda-exclusao.js').replace(/\\/g, '/');
+function arquivoGanchos(bot) {
+  const arq = path.join(dirBot(bot), '.flow', 'ganchos.json');
+  const node = process.execPath.replace(/\\/g, '/');
+  const conteudo = JSON.stringify({
+    hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell|mcp__.*', hooks: [{ type: 'command', command: `"${node}" "${GUARDA}"`, timeout: 1860 }] }] },
+  }, null, 2);
+  fs.mkdirSync(path.dirname(arq), { recursive: true });
+  if (!fs.existsSync(arq) || fs.readFileSync(arq, 'utf8') !== conteudo) fs.writeFileSync(arq, conteudo);
+  return arq;
 }
 
 function argsDoTurno(bot, { sessao, nova, snapshot, mcp }) {
@@ -124,15 +289,38 @@ function argsDoTurno(bot, { sessao, nova, snapshot, mcp }) {
   if (bot.esforco) a.push('--effort', bot.esforco);
   if (bot.autonomia === 'perguntar') a.push('--permission-mode', 'default', '--permission-prompt-tool', 'mcp__flow__aprovar');
   else a.push('--permission-mode', 'bypassPermissions');
+  a.push('--settings', arquivoGanchos(bot));
   for (const p of bot.pastas || []) if (p && fs.existsSync(expandir(p))) a.push('--add-dir', expandir(p));
   if (mcp.bloquear.length) a.push('--disallowedTools', mcp.bloquear.join(','));
   return a;
 }
 
+// Tudo o que os bots geram fica no ~/ClaudeFlow: o trabalho na pasta do bot, os caches (modelos do Whisper e do
+// Atlas, downloads de pacotes, temporários) em ~/ClaudeFlow/cache.
+export function pastasCentrais() {
+  const cache = path.join(HOME, 'cache');
+  return {
+    TEMP: path.join(cache, 'tmp'), TMP: path.join(cache, 'tmp'),
+    HF_HOME: path.join(cache, 'huggingface'),
+    PERFECT_CUT_MODELOS: path.join(cache, 'perfect-cut'),
+    ESTUDIO_MODELOS: path.join(cache, 'atlas-modelos'),
+    UV_CACHE_DIR: path.join(cache, 'uv'),
+    PIP_CACHE_DIR: path.join(cache, 'pip'),
+    PLAYWRIGHT_BROWSERS_PATH: path.join(cache, 'navegadores'),
+  };
+}
+// {{bot}} nos valores de env do bot = pasta do bot (ex.: "{{bot}}/trabalho/edicoes").
+export const expandirBot = (bot, v) => String(v).replace(/\{\{bot\}\}/g, dirBot(bot));
+
 function envDoTurno(bot) {
-  const env = { ...process.env, ...segredos(), ...(bot.env || {}) };
+  const centrais = pastasCentrais();
+  for (const p of new Set([centrais.TEMP])) fs.mkdirSync(p, { recursive: true });
+  const proprios = Object.fromEntries(Object.entries(bot.env || {}).map(([k, v]) => [k, expandir(expandirBot(bot, v))]));
+  const env = { ...process.env, ...centrais, ...segredos(), ...proprios };
+  env.FLOW_TRABALHO = path.join(dirBot(bot), 'trabalho');
   env.FLOW_URL = FLOW_URL;
   env.FLOW_BOT = bot.id;
+  env.FLOW_TOKEN = bot.token; // o gancho guarda-exclusao.js abre a confirmação no app com ele
   env.MCP_TOOL_TIMEOUT = String(Math.max(30, config.squad.esperaMaxMin + 5) * 60 * 1000);
   env.PYTHONUTF8 = '1';
   delete env.CLAUDECODE; // se o servidor foi aberto de dentro de outra sessão do Claude Code
@@ -170,6 +358,8 @@ function executar(bot, item, tentativa = 0) {
     });
     const estado = { child, turno, item, inicio, sessao: bot.sessao, parado: false, cadeia: item.cadeia || 0 };
     ativos.set(bot.id, estado);
+    salvarFilas();
+    const longo = setTimeout(() => { try { ganchos.turnoLongo?.(bot, item); } catch (e) { console.error('[turno longo]', e.message); } }, 90e3);
     bot.ultimaAtividade = inicio;
     avisarEstado(bot);
     emitir('turno', { bot: bot.id, inicio: true, turno });
@@ -235,6 +425,7 @@ function executar(bot, item, tentativa = 0) {
     });
 
     child.on('close', async (code) => {
+      clearTimeout(longo);
       rl.close();
       const dur = Date.now() - inicio;
       const final = resultado?.result ?? textos.at(-1) ?? '';
@@ -269,6 +460,7 @@ function executar(bot, item, tentativa = 0) {
       emitir('turno', { bot: bot.id, fim: true, turno, ms: dur, contexto: ctx });
 
       item.aguardar?.resolve?.({ texto: final, erro: erroCli });
+      try { ganchos.fimDoTurno?.(bot, item, { final, erro: erroCli, parado: estado.parado }); } catch (e) { console.error('[fim do turno]', e.message); }
       await depoisDoTurno(bot, item, { final, dur, erroCli, parado: estado.parado });
       resolve();
     });

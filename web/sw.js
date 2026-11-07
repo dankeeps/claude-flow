@@ -1,6 +1,6 @@
 // Service worker do Claude Flow: guarda a casca do app para abrir rápido (a API é sempre da rede) e mostra as
 // notificações push ("Bot Editor terminou", "pede permissão"…). Clicar na notificação abre o bot.
-const CACHE = 'claude-flow-v3';
+const CACHE = 'claude-flow-v9';
 const CASCA = ['/', '/index.html', '/style.css', '/app.js', '/avatar.js', '/icones.js', '/manifest.webmanifest', '/icones/icone-192.png'];
 
 self.addEventListener('install', (e) => {

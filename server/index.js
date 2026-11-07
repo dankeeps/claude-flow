@@ -12,18 +12,69 @@ import * as nav from './navegador.js';
 import * as atlas from './atlas.js';
 import * as interno from './interno.js';
 import { abrirSSE, emitir, marcarPresenca, inscreverPush, chavePublicaPush, notificar } from './eventos.js';
-import { listarTemplates, criarBot, skillsDoBot, catalogoSkills, ligarSkill } from './templates.js';
-import { statusConectores } from './conectores.js';
+import { listarTemplates, criarBot, skillsDoBot, catalogoSkills, ligarSkill, ligarHabilidades, skillsComDescricao } from './templates.js';
+import { statusConectores, atualizarStatusClaude, criarConta, renomearConta, removerConta, gravarCampos, idValido } from './conectores.js';
 import { iniciarAgenda } from './agenda.js';
+import * as tarefas from './tarefas.js';
+import * as recursos from './recursos.js';
+import * as rotinas from './rotinas.js';
+import * as sala from './sala.js';
+import * as galeria from './galeria.js';
 
 store.carregar();
+// código novo pode ter mudado as regras do começo de sessão: cada bot remonta a dele na próxima mensagem
+for (const b of store.bots.values()) b.snapshotSujo = true;
+// habilidades do Claude Flow (habilidades/, ex.: baixar-do-drive) ficam em todos os bots, inclusive os já criados
+for (const b of store.bots.values()) { try { ligarHabilidades(b); } catch (e) { console.error('habilidades', b.nome, e.message); } }
+// O Atlas liga junto com o Claude Flow (já apontando para as pastas do Bot Editor dentro do ~/ClaudeFlow).
+setTimeout(() => { if (atlas.onde().instalado) atlas.ligar().catch((e) => console.error('Atlas:', e.message)); }, 2000).unref();
+// Rodando pelo supervisor (scripts/servico.js): se ele sumir (tarefa parada), este servidor sai junto.
+if (process.env.FLOW_SUPERVISOR) {
+  const pai = Number(process.env.FLOW_SUPERVISOR);
+  setInterval(() => { try { process.kill(pai, 0); } catch { process.exit(0); } }, 3000).unref();
+}
+// Status real dos conectores da conta claude.ai: confere ao ligar e de 10 em 10 minutos (o app atualiza sozinho).
+const verificarConectores = () => atualizarStatusClaude().then(() => emitir('estado', {})).catch(() => {});
+setTimeout(verificarConectores, 3000).unref();
+setInterval(verificarConectores, 10 * 60 * 1000).unref();
 
 // Primeira vez: o squad Principal já nasce com o Bot Editor.
 if (store.squads.size === 0) {
   const sq = store.criarSquad({ nome: 'Principal', descricao: 'Fluxo principal.' });
-  criarBot({ squad: sq.id, nome: 'Bot Editor', template: 'editor' });
-  console.log('Squad "Principal" criado com o Bot Editor.');
+  criarBot({ squad: sq.id, nome: 'Editor', template: 'editor' });
+  console.log('Squad "Principal" criado com o Editor.');
 }
+
+// ---------- pedido do chat que demora vira cartão no kanban ----------
+// Passou de 90 s e não é tarefa, repasse nem manutenção: entra em "Fazendo" com o pedido como título; os avisos
+// de progresso do bot viram notas do cartão; no fim, vai para "Revisão" com o resultado (ou fica com o erro).
+const tituloDoPedido = (txt) => {
+  const l = String(txt || '').split('\n').map((x) => x.trim()).find((x) => x && !/^\[/.test(x)) || 'Pedido no chat';
+  return l.length > 90 ? `${l.slice(0, 87).replace(/\s+\S*$/, '')}…` : l;
+};
+runner.ganchos.turnoLongo = (bot, item) => {
+  if (item.especial || item.tarefa || item.origem?.tipo === 'bot') return;
+  const t = tarefas.criar({ squad: bot.squad, bot: bot.id, titulo: tituloDoPedido(item.texto), descricao: String(item.texto || '').slice(0, 3000), status: 'fazendo' },
+    { autor: 'usuario' });
+  db.addEvento(t.id, { autor: bot.id, tipo: 'nota', texto: item.origem?.tipo === 'rotina' ? `Rotina "${item.origem.nome}" em andamento.` : 'Em andamento (pedido feito no chat).' });
+  item.tarefa = t.id;
+  item.tarefaAuto = t.id;
+  runner.salvarFilas(); // o vínculo com o cartão sobrevive a um reinício
+  emitir('tarefa', { squad: t.squad, id: t.id });
+};
+runner.ganchos.fimDoTurno = (bot, item, { final, erro, parado }) => {
+  if (!item.tarefaAuto) return;
+  const t = db.pegarTarefa(item.tarefaAuto);
+  if (!t || t.status !== 'fazendo') return; // o bot já moveu o cartão sozinho
+  if (parado) db.addEvento(t.id, { autor: 'usuario', tipo: 'nota', texto: 'Parado por você.' });
+  else if (erro) db.addEvento(t.id, { autor: bot.id, tipo: 'nota', texto: `Parou com erro: ${String(erro).slice(0, 500)}` });
+  else {
+    db.atualizarTarefa(t.id, { status: 'revisao' });
+    db.addEvento(t.id, { autor: bot.id, tipo: 'status', texto: 'Fazendo → Revisão' });
+    if (final) db.addEvento(t.id, { autor: bot.id, tipo: 'nota', texto: String(final).slice(0, 1500) });
+  }
+  emitir('tarefa', { squad: t.squad, id: t.id });
+};
 
 // ---------- utilidades HTTP ----------
 const MIME = {
@@ -90,9 +141,29 @@ function servirWeb(req, res, url) {
   if (!arq.startsWith(path.join(REPO, 'web'))) return json(res, 403, { erro: 'proibido' });
   if (!fs.existsSync(arq)) return json(res, 404, { erro: 'não encontrado' });
   const tipo = MIME[path.extname(arq)] || 'application/octet-stream';
-  const cache = rel === '/sw.js' || rel === '/index.html' ? 'no-cache' : 'no-cache';
-  res.writeHead(200, { 'Content-Type': tipo, 'Cache-Control': cache, ...(rel === '/sw.js' ? { 'Service-Worker-Allowed': '/' } : {}) });
+  // Nada do app fica guardado no caminho (navegador, celular, Cloudflare): toda versão nova aparece no próximo
+  // recarregar, em qualquer aparelho. Além disso, index.html e app.js saem com ?v=<versão> nos arquivos que chamam.
+  const semCache = { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'CDN-Cache-Control': 'no-store', 'Cloudflare-CDN-Cache-Control': 'no-store' };
+  const cab = { 'Content-Type': tipo, ...semCache, ...(rel === '/sw.js' ? { 'Service-Worker-Allowed': '/' } : {}) };
+  if (rel === '/index.html' || /\.js$/.test(rel)) {
+    const v = versaoWeb();
+    let txt = fs.readFileSync(arq, 'utf8');
+    if (rel === '/index.html') txt = txt.replace(/(href|src)="\/(style\.css|app\.js)"/g, `$1="/$2?v=${v}"`);
+    else txt = txt.replace(/(from\s+['"]\.\/[\w-]+\.js)(['"])/g, `$1?v=${v}$2`);
+    res.writeHead(200, cab);
+    return res.end(txt);
+  }
+  res.writeHead(200, cab);
   fs.createReadStream(arq).pipe(res);
+}
+
+// Versão do app = última modificação dos arquivos de web/ (muda sozinha quando o app é atualizado).
+function versaoWeb() {
+  let maior = 0;
+  for (const f of fs.readdirSync(path.join(REPO, 'web'))) {
+    try { maior = Math.max(maior, fs.statSync(path.join(REPO, 'web', f)).mtimeMs); } catch {}
+  }
+  return Math.round(maior).toString(36);
 }
 
 // ---------- estado para o app ----------
@@ -165,6 +236,15 @@ rota('DELETE', '/api/squads/:id', async ({ p }) => {
   emitir('estado', {});
   return { ok: true, lixeira: destino };
 });
+// conectores do squad: todos os bots do squad usam os mesmos
+rota('PUT', '/api/squads/:id/conectores', async ({ p, corpo }) => {
+  const sq = pegarSquad(p.id);
+  sq.conectores = [...new Set((corpo?.conectores || []).map(String))].filter(idValido);
+  store.salvarSquad(sq);
+  sujarSquad(sq.id);
+  emitir('estado', {});
+  return sq;
+});
 rota('GET', '/api/squads/:id/sala', async ({ p }) => {
   const sq = pegarSquad(p.id);
   return { mensagens: db.salaDoSquad(sq.id), quadro: lerTexto(path.join(store.dirSquad(sq.id), 'quadro.md')) };
@@ -181,13 +261,14 @@ rota('POST', '/api/bots', async ({ corpo }) => {
   pegarSquad(corpo.squad);
   if (!corpo.nome?.trim()) throw Object.assign(new Error('dê um nome ao bot'), { status: 400 });
   const bot = criarBot(corpo);
+  store.garantirConectoresNoSquad(bot.squad, bot.conectores); // o que o template precisa passa a valer no squad
   sujarSquad(bot.squad);
   emitir('estado', {});
   return botPublico(bot);
 });
 rota('PATCH', '/api/bots/:id', async ({ p, corpo }) => {
   const bot = pegarBot(p.id);
-  const campos = ['nome', 'modelo', 'esforco', 'autonomia', 'conectores', 'navegador', 'pastas', 'prefs', 'env'];
+  const campos = ['nome', 'modelo', 'esforco', 'autonomia', 'pesado', 'conectores', 'navegador', 'pastas', 'prefs', 'env'];
   for (const c of campos) if (corpo[c] !== undefined) bot[c] = corpo[c];
   if (corpo.avatar !== undefined) bot.avatar = store.limparAvatar(corpo.avatar);
   if (typeof bot.nome === 'string') bot.nome = bot.nome.trim().slice(0, 40) || 'Bot';
@@ -229,6 +310,116 @@ rota('POST', '/api/bots/:id/nova-sessao', async ({ p }) => {
   emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, papel: 'sistema', texto: 'Sessão nova (sem compactar). A função e a memória continuam.' }));
   return { ok: true };
 });
+// barra de informações do bot: função, tarefas abertas, links e modelos
+rota('GET', '/api/bots/:id/info', async ({ p }) => {
+  const bot = pegarBot(p.id);
+  return {
+    funcao: mem.ler(bot, 'funcao'), limiteFuncao: config.memoria.limiteFuncao,
+    tarefas: db.tarefasDoBot(bot.id), links: recursos.links(bot),
+    modelos: recursos.modelos(bot).map(({ nome, tamanho }) => ({ nome, tamanho })),
+    pasta: path.join(store.dirBot(bot), 'trabalho'),
+    rotinas: rotinas.listar(bot.id),
+    habilidades: skillsComDescricao(bot),
+  };
+});
+// contexto da sessão (o "Contexto X%" ao lado do seletor de modelo)
+rota('GET', '/api/bots/:id/contexto', async ({ p }) => {
+  const bot = pegarBot(p.id);
+  const { base, turnos } = db.contextoDaSessao(bot.id, bot.sessao);
+  return {
+    usado: bot.ctxTokens || 0, maximo: config.memoria.contextoMax, compactarEm: config.memoria.compactarEm, compactarDias: config.memoria.compactarDias,
+    base: Math.min(base, bot.ctxTokens || 0), turnos, inicio: bot.sessao ? bot.sessaoInicio || null : null, sessao: !!bot.sessao,
+    resumos: mem.ultimosResumos(bot).length, ocupado: runner.ocupado(bot.id),
+  };
+});
+// fila: pausar/retomar, tirar uma mensagem, passar uma mensagem para a frente
+rota('POST', '/api/bots/:id/pausar', async ({ p, corpo }) => runner.pausar(pegarBot(p.id).id, corpo.pausado !== false));
+rota('DELETE', '/api/bots/:id/fila/:item', async ({ p }) => runner.cancelarItem(pegarBot(p.id).id, p.item));
+rota('POST', '/api/bots/:id/fila/:item/frente', async ({ p }) => runner.passarNaFrente(pegarBot(p.id).id, p.item));
+
+// rotinas
+const pegarRotina = (id) => {
+  const r = rotinas.pegar(id);
+  if (!r) throw Object.assign(new Error('rotina não encontrada'), { status: 404 });
+  return r;
+};
+const comLink = (r) => ({ ...r, link: `${config.urlPublica || `http://127.0.0.1:${config.porta}`}/api/gatilho/${r.gatilho}` });
+rota('POST', '/api/rotinas', async ({ corpo }) => { pegarBot(corpo.bot); return comLink(rotinas.criar(corpo)); });
+rota('GET', '/api/rotinas/:id', async ({ p }) => comLink({ ...pegarRotina(p.id), descricao: rotinas.descrever(pegarRotina(p.id).quando) }));
+rota('PATCH', '/api/rotinas/:id', async ({ p, corpo }) => { pegarRotina(p.id); return comLink(rotinas.editar(p.id, corpo || {})); });
+rota('POST', '/api/rotinas/:id/rodar', async ({ p }) => { pegarRotina(p.id); return rotinas.disparar(p.id, { origem: 'manual' }); });
+rota('DELETE', '/api/rotinas/:id', async ({ p }) => { pegarRotina(p.id); rotinas.remover(p.id); return { ok: true }; });
+
+// sala do squad: o usuário escreve e a mensagem vai para quem deve responder
+rota('POST', '/api/squads/:id/sala', async ({ p, corpo }) => {
+  const sq = pegarSquad(p.id);
+  const anexos = (corpo.anexos || []).map((t) => interno.arquivoPorToken(t)).filter(Boolean)
+    .map((a) => ({ caminho: a.caminho, nome: a.nome, tamanho: a.tamanho }));
+  return sala.enviar(sq.id, { texto: corpo.texto, anexos });
+});
+rota('POST', '/api/bots/:id/links', async ({ p, corpo }) => {
+  const bot = pegarBot(p.id);
+  const lista = recursos.salvarLink(bot, corpo || {});
+  marcarSujo(bot);
+  return lista;
+});
+rota('DELETE', '/api/bots/:id/links/:link', async ({ p }) => {
+  const bot = pegarBot(p.id);
+  const lista = recursos.removerLink(bot, p.link);
+  marcarSujo(bot);
+  return lista;
+});
+rota('GET', '/api/bots/:id/modelos/:nome', async ({ p }) => recursos.lerModelo(pegarBot(p.id), decodeURIComponent(p.nome)));
+rota('PUT', '/api/bots/:id/modelos/:nome', async ({ p, corpo }) => {
+  const bot = pegarBot(p.id);
+  const m = recursos.gravarModelo(bot, corpo?.nome || decodeURIComponent(p.nome), corpo?.texto, { nomeAntigo: decodeURIComponent(p.nome) });
+  marcarSujo(bot);
+  return m;
+});
+rota('POST', '/api/bots/:id/modelos', async ({ p, corpo }) => {
+  const bot = pegarBot(p.id);
+  const m = recursos.gravarModelo(bot, corpo?.nome, corpo?.texto || `# ${corpo?.nome || 'Modelo'}\n`);
+  marcarSujo(bot);
+  return m;
+});
+rota('DELETE', '/api/bots/:id/modelos/:nome', async ({ p }) => {
+  const bot = pegarBot(p.id);
+  recursos.arquivarModelo(bot, decodeURIComponent(p.nome));
+  marcarSujo(bot);
+  return { ok: true };
+});
+
+// tarefas (kanban do squad)
+const pegarTarefa = (id) => {
+  const t = db.pegarTarefa(Number(id));
+  if (!t) throw Object.assign(new Error('tarefa não encontrada'), { status: 404 });
+  return t;
+};
+rota('GET', '/api/squads/:id/tarefas', async ({ p }) => {
+  const sq = pegarSquad(p.id);
+  return { tarefas: db.tarefasDoSquad(sq.id), notas: db.contarEventos(sq.id) };
+});
+rota('POST', '/api/tarefas', async ({ corpo }) => {
+  let t = tarefas.criar(corpo || {}, { autor: 'usuario' });
+  if (corpo?.enviar && t.bot) t = tarefas.enviar(t, { autor: 'usuario' });
+  return t;
+});
+rota('GET', '/api/tarefas/:id', async ({ p }) => {
+  const t = pegarTarefa(p.id);
+  return { tarefa: t, eventos: db.eventosDaTarefa(t.id), pasta: t.bot ? tarefas.pastaDaTarefa(t) : null };
+});
+rota('PATCH', '/api/tarefas/:id', async ({ p, corpo }) => tarefas.editar(pegarTarefa(p.id), corpo || {}, { autor: 'usuario' }));
+rota('POST', '/api/tarefas/:id/enviar', async ({ p }) => tarefas.enviar(pegarTarefa(p.id), { autor: 'usuario' }));
+rota('POST', '/api/tarefas/:id/notas', async ({ p, corpo }) => { tarefas.anotar(pegarTarefa(p.id), corpo?.texto, { autor: 'usuario' }); return { ok: true }; });
+rota('DELETE', '/api/tarefas/:id', async ({ p }) => {
+  const t = pegarTarefa(p.id);
+  db.apagarTarefa(t.id);
+  emitir('tarefa', { squad: t.squad, id: t.id, apagada: true });
+  return { ok: true };
+});
+
+rota('GET', '/api/bots/:id/galeria', async ({ p }) => ({ itens: galeria.listar(pegarBot(p.id)) }));
+
 rota('GET', '/api/bots/:id/arquivos', async ({ p }) => {
   const bot = pegarBot(p.id);
   const dirR = path.join(store.dirBot(bot), 'resumos');
@@ -290,7 +481,45 @@ rota('GET', '/api/conectores', async () => statusConectores());
 rota('PUT', '/api/segredos', async ({ corpo }) => {
   gravarSegredos(corpo || {});
   for (const b of store.bots.values()) marcarSujo(b);
+  emitir('estado', {});
   return { ok: true, conectores: statusConectores() };
+});
+// confere de novo a conta claude.ai (depois de conectar algo lá)
+rota('POST', '/api/conectores/verificar', async () => {
+  await atualizarStatusClaude();
+  emitir('estado', {});
+  return statusConectores();
+});
+// campos de uma conta que não são segredo (ex.: o e-mail da conta Google)
+rota('PUT', '/api/conectores/:id/campos', async ({ p, corpo }) => {
+  const campos = gravarCampos(p.id, corpo || {});
+  for (const b of store.bots.values()) marcarSujo(b);
+  emitir('estado', {});
+  return { ok: true, campos };
+});
+// contas a mais de um mesmo conector (ex.: outro token da Apify, outra conta Google)
+rota('POST', '/api/contas', async ({ corpo }) => {
+  const conta = criarConta(corpo || {});
+  emitir('estado', {});
+  return conta;
+});
+rota('PATCH', '/api/contas/:id', async ({ p, corpo }) => {
+  const conta = renomearConta(p.id, corpo?.nome);
+  for (const b of store.bots.values()) marcarSujo(b);
+  emitir('estado', {});
+  return conta;
+});
+rota('DELETE', '/api/contas/:id', async ({ p }) => {
+  const chaves = removerConta(p.id);
+  if (chaves.length) gravarSegredos(Object.fromEntries(chaves.map((k) => [k, null])));
+  for (const sq of store.squads.values()) {
+    if (!(sq.conectores || []).includes(p.id)) continue;
+    sq.conectores = sq.conectores.filter((x) => x !== p.id);
+    store.salvarSquad(sq);
+    sujarSquad(sq.id);
+  }
+  emitir('estado', {});
+  return { ok: true };
 });
 
 // navegador
@@ -337,7 +566,25 @@ async function tratar(req, res) {
 
   if (url.pathname === '/api/eventos') return abrirSSE(req, res);
 
+  // link de disparo de uma rotina (webhook): o token longo na URL é a autorização; o corpo JSON vai junto para o bot
+  const mGat = url.pathname.match(/^\/api\/gatilho\/([a-f0-9]{32})$/);
+  if (mGat) {
+    const r = rotinas.porGatilho(mGat[1]);
+    if (!r) return json(res, 404, { erro: 'link de rotina não encontrado' });
+    if (req.method !== 'POST') return json(res, 405, { erro: 'use POST' });
+    let dados = null;
+    try { dados = await corpoJSON(req); } catch { dados = null; }
+    return json(res, 200, rotinas.disparar(r.id, { origem: 'link', dados }));
+  }
+
   // arquivo entregue por um bot ou anexado: o token na URL é a autorização (funciona em <video src>)
+  // capa (miniatura) para a galeria do bot
+  const mCapa = url.pathname.match(/^\/api\/arquivo\/([a-f0-9]{24})\/capa$/);
+  if (mCapa) {
+    const arq = await galeria.capa(mCapa[1]);
+    if (!arq) return json(res, 404, { erro: 'sem capa' });
+    return servirArquivo(req, res, arq);
+  }
   const mArq = url.pathname.match(/^\/api\/arquivo\/([a-f0-9]{24})$/);
   if (mArq) {
     const a = interno.arquivoPorToken(mArq[1]);
@@ -398,4 +645,7 @@ servidor.listen(config.porta, config.host, () => {
   console.log(`Dados em ${HOME}`);
   if (config.host !== '127.0.0.1') console.log('ATENÇÃO: o servidor está aberto para a rede (host no config.json).');
   iniciarAgenda();
+  rotinas.iniciarRotinas();
+  // a fila e o trabalho interrompido (queda de energia, reinício) voltam de onde pararam
+  setTimeout(() => runner.restaurarFilas(), 1500);
 });

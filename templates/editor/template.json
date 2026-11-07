@@ -1,10 +1,8 @@
 {
-  "nome": "Bot Editor",
-  "descricao": "Edição de anúncio e VSL vertical: transcreve, corta, busca B-roll (YouTube Shorts / TikTok / biblioteca), monta no modelo do Atlas e entrega na timeline sem renderizar.",
+  "nome": "Editor",
+  "descricao": "Edição de anúncio e VSL vertical: transcreve, corta, busca B-roll (YouTube Shorts / TikTok / biblioteca) e monta no modelo do Atlas — entrega na timeline para revisar ou já renderizado, tudo na placa de vídeo.",
   "avatar": {
-    "glifo": "filme",
-    "cor": "laranja",
-    "fundo": "cor"
+    "planeta": "jupiter"
   },
   "ordem": 10,
   "modelo": "opus",
@@ -24,7 +22,9 @@
   ],
   "env": {
     "PERFECT_EDIT_ATLAS": "{{atlas.dir}}",
-    "SHORTS_TRABALHO": "~/Edições/_shorts"
+    "ESTUDIO_RAIZ": "{{bot}}/trabalho/edicoes",
+    "ESTUDIO_BROLLS": "{{bot}}/trabalho/b-rolls",
+    "SHORTS_TRABALHO": "{{bot}}/trabalho/edicoes/_shorts"
   },
   "preferencias": [
     {
@@ -89,14 +89,14 @@
       "padrao": "logo abaixo do pescoço; no meio da tela na dividida e no canto"
     },
     {
-      "chave": "render",
-      "rotulo": "Renderizar",
+      "chave": "entrega",
+      "rotulo": "Entrega",
       "tipo": "escolha",
       "opcoes": [
-        "só quando eu pedir",
-        "renderizar no fim de toda edição"
+        "timeline do Atlas para eu revisar (sem render)",
+        "render final pronto (.mp4)"
       ],
-      "padrao": "só quando eu pedir"
+      "padrao": "timeline do Atlas para eu revisar (sem render)"
     },
     {
       "chave": "estudoGemini",
@@ -108,5 +108,6 @@
       ],
       "padrao": "estudar só os clipes novos"
     }
-  ]
+  ],
+  "pesado": true
 }

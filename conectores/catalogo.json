@@ -3,6 +3,7 @@
   "conectores": [
     {
       "id": "gmail",
+      "icone": "gmail.svg",
       "nome": "Gmail",
       "grupo": "Google",
       "tipo": "claudeai",
@@ -11,6 +12,7 @@
     },
     {
       "id": "google-drive",
+      "icone": "google-drive.svg",
       "nome": "Google Drive",
       "grupo": "Google",
       "tipo": "claudeai",
@@ -19,6 +21,7 @@
     },
     {
       "id": "google-docs",
+      "icone": "google-docs.svg",
       "nome": "Google Docs",
       "grupo": "Google",
       "tipo": "claudeai",
@@ -27,6 +30,7 @@
     },
     {
       "id": "google-sheets",
+      "icone": "google-sheets.svg",
       "nome": "Google Sheets",
       "grupo": "Google",
       "tipo": "claudeai",
@@ -35,6 +39,7 @@
     },
     {
       "id": "google-calendar",
+      "icone": "google-calendar.svg",
       "nome": "Google Agenda",
       "grupo": "Google",
       "tipo": "claudeai",
@@ -42,7 +47,55 @@
       "descricao": "Ver e criar eventos."
     },
     {
+      "id": "google-conta",
+      "nome": "Conta Google extra",
+      "icone": "google.svg",
+      "grupo": "Google",
+      "tipo": "stdio",
+      "multiContas": true,
+      "emTeste": true,
+      "comando": "uvx",
+      "args": [
+        "workspace-mcp",
+        "--single-user",
+        "--tools",
+        "gmail",
+        "drive",
+        "docs",
+        "sheets",
+        "calendar"
+      ],
+      "env": {
+        "GOOGLE_OAUTH_CLIENT_ID": "${GOOGLE_OAUTH_CLIENT_ID}",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "${GOOGLE_OAUTH_CLIENT_SECRET}",
+        "USER_GOOGLE_EMAIL": "${EMAIL}",
+        "WORKSPACE_MCP_CREDENTIALS_DIR": "${PASTA_CONTA}",
+        "OAUTHLIB_INSECURE_TRANSPORT": "1"
+      },
+      "segredos": [
+        {
+          "nome": "GOOGLE_OAUTH_CLIENT_ID",
+          "rotulo": "Client ID (Google Cloud)",
+          "compartilhado": true,
+          "ajuda": "Um cliente OAuth do tipo Desktop, criado uma vez: vale para todas as contas Google extras. Passo a passo em docs/conectores.md."
+        },
+        {
+          "nome": "GOOGLE_OAUTH_CLIENT_SECRET",
+          "rotulo": "Client secret (Google Cloud)",
+          "compartilhado": true
+        }
+      ],
+      "camposConta": [
+        {
+          "nome": "EMAIL",
+          "rotulo": "E-mail desta conta Google"
+        }
+      ],
+      "descricao": "Gmail, Drive, Docs, Sheets e Agenda de outra conta Google, além da que está conectada no claude.ai. Cada conta extra entra uma vez pelo navegador."
+    },
+    {
       "id": "notion",
+      "icone": "notion.png",
       "nome": "Notion",
       "grupo": "Trabalho",
       "tipo": "claudeai",
@@ -51,6 +104,7 @@
     },
     {
       "id": "meta-ads",
+      "icone": "meta-ads.svg",
       "nome": "Meta Ads",
       "grupo": "Tráfego",
       "tipo": "claudeai",
@@ -59,6 +113,8 @@
     },
     {
       "id": "higgsfield",
+      "icone": "higgsfield.png",
+      "iconeCheio": true,
       "nome": "Higgsfield",
       "grupo": "Criação",
       "tipo": "claudeai",
@@ -67,6 +123,7 @@
     },
     {
       "id": "navegador",
+      "icone": "navegador.svg",
       "nome": "Navegador do Claude Flow",
       "grupo": "Claude Flow",
       "tipo": "navegador",
@@ -81,38 +138,75 @@
     },
     {
       "id": "apify",
+      "icone": "apify.png",
       "nome": "Apify",
       "grupo": "Dados",
       "tipo": "stdio",
       "comando": "npx",
-      "args": ["-y", "@apify/actors-mcp-server"],
-      "env": { "APIFY_TOKEN": "${APIFY_TOKEN}" },
-      "segredos": [{ "nome": "APIFY_TOKEN", "rotulo": "Token da Apify", "ajuda": "console.apify.com > Settings > API & Integrations" }],
-      "descricao": "Atores da Apify (TikTok, Instagram, Biblioteca de Anúncios). Cobra por resultado."
+      "args": [
+        "-y",
+        "@apify/actors-mcp-server"
+      ],
+      "env": {
+        "APIFY_TOKEN": "${APIFY_TOKEN}"
+      },
+      "segredos": [
+        {
+          "nome": "APIFY_TOKEN",
+          "rotulo": "Token da Apify",
+          "ajuda": "console.apify.com > Settings > API & Integrations"
+        }
+      ],
+      "descricao": "Atores da Apify (TikTok, Instagram, Biblioteca de Anúncios). Cobra por resultado.",
+      "multiContas": true
     },
     {
       "id": "github",
+      "icone": "github.svg",
       "nome": "GitHub",
       "grupo": "Desenvolvimento",
       "tipo": "http",
       "url": "https://api.githubcopilot.com/mcp/",
-      "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" },
-      "segredos": [{ "nome": "GITHUB_TOKEN", "rotulo": "Token do GitHub", "ajuda": "github.com/settings/tokens (fine-grained, só os repositórios que o bot pode mexer)" }],
-      "descricao": "Repositórios, issues e pull requests (o gh no terminal continua funcionando sem isto)."
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
+      },
+      "segredos": [
+        {
+          "nome": "GITHUB_TOKEN",
+          "rotulo": "Token do GitHub",
+          "ajuda": "github.com/settings/tokens (fine-grained, só os repositórios que o bot pode mexer)"
+        }
+      ],
+      "descricao": "Repositórios, issues e pull requests (o gh no terminal continua funcionando sem isto).",
+      "multiContas": true
     },
     {
       "id": "supabase",
+      "icone": "supabase.svg",
       "nome": "Supabase",
       "grupo": "Desenvolvimento",
       "tipo": "stdio",
       "comando": "npx",
-      "args": ["-y", "@supabase/mcp-server-supabase@latest"],
-      "env": { "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}" },
-      "segredos": [{ "nome": "SUPABASE_ACCESS_TOKEN", "rotulo": "Access token do Supabase", "ajuda": "supabase.com/dashboard/account/tokens" }],
-      "descricao": "Projetos de trackeamento: tabelas, SQL, funções."
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      },
+      "segredos": [
+        {
+          "nome": "SUPABASE_ACCESS_TOKEN",
+          "rotulo": "Access token do Supabase",
+          "ajuda": "supabase.com/dashboard/account/tokens"
+        }
+      ],
+      "descricao": "Projetos de trackeamento: tabelas, SQL, funções.",
+      "multiContas": true
     },
     {
       "id": "vercel",
+      "icone": "vercel.svg",
       "nome": "Vercel",
       "grupo": "Desenvolvimento",
       "tipo": "http",
@@ -122,14 +216,26 @@
     },
     {
       "id": "elevenlabs",
+      "icone": "elevenlabs.svg",
       "nome": "ElevenLabs",
       "grupo": "Criação",
       "tipo": "stdio",
       "comando": "uvx",
-      "args": ["elevenlabs-mcp"],
-      "env": { "ELEVENLABS_API_KEY": "${ELEVENLABS_API_KEY}" },
-      "segredos": [{ "nome": "ELEVENLABS_API_KEY", "rotulo": "Chave da ElevenLabs", "ajuda": "elevenlabs.io > Profile > API Keys" }],
-      "descricao": "Voz (texto para fala, vozes clonadas). Precisa do uv instalado."
+      "args": [
+        "elevenlabs-mcp"
+      ],
+      "env": {
+        "ELEVENLABS_API_KEY": "${ELEVENLABS_API_KEY}"
+      },
+      "segredos": [
+        {
+          "nome": "ELEVENLABS_API_KEY",
+          "rotulo": "Chave da ElevenLabs",
+          "ajuda": "elevenlabs.io > Profile > API Keys"
+        }
+      ],
+      "descricao": "Voz (texto para fala, vozes clonadas). Precisa do uv instalado.",
+      "multiContas": true
     }
   ]
 }

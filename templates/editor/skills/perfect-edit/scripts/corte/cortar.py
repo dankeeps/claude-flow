@@ -1,6 +1,6 @@
 """Renderiza os cortes do plano.json: mantém só as faixas escolhidas e tira TODO silêncio entre as palavras.
 
-  cortar.py <trabalho> [nome ...]        (sem nomes = todos do plano)
+  cortar.py <trabalho> [nome ...] [--hd]   (sem nomes = todos do plano; --hd = sai em 1080/30 para o Atlas)
 
 plano.json:
   {"saida": "~/Downloads/cortados",
@@ -17,11 +17,35 @@ Silêncio sai em duas camadas:
      Em bruto com ruído de fundo (piso > -50 dB), o miolo das palavras é protegido para não abrir buraco
      em consoante fraca.
 Cortes caem no grade de quadros (áudio e vídeo com a mesma duração), emendas com fade de 4 ms (sem estalo).
-Resolução, proporção e fps originais.
+Resolução, proporção e fps originais; com --hd (corte que segue para o Atlas), 1080x1920 a 30 qps. Pela placa NVIDIA quando existe.
 """
 import os, sys, math, shutil, tempfile, subprocess
 from base import *
 from vad import planejar_segmentos
+
+
+def _nvenc():
+    """O ffmpeg codifica mesmo com h264_nvenc? (placa NVIDIA; testa 1 quadro). PERFECT_CUT_NVENC=0|1 força."""
+    f = os.environ.get("PERFECT_CUT_NVENC")
+    if f in ("0", "1"): return f == "1"
+    try:
+        return subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=black:s=256x256:d=0.1", "-frames:v", "1",
+                               "-c:v", "h264_nvenc", "-f", "null", "-"], capture_output=True, timeout=30).returncode == 0
+    except Exception:
+        return False
+
+
+NVENC = _nvenc()
+HD = False
+# Decodificar o 4K/HEVC do iPhone na placa; se a placa não aceitar o formato, o ffmpeg volta sozinho para a CPU.
+DECODE_GPU = ["-hwaccel", "cuda"] if NVENC else []
+
+
+def h264(crf):
+    if NVENC:
+        return ["-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq", str(crf + 1), "-b:v", "0",
+                "-spatial-aq", "1", "-bf", "3"]
+    return ["-c:v", "libx264", "-preset", "medium", "-crf", str(crf)]
 
 
 def menos(faixas, fora):
@@ -89,6 +113,13 @@ def render(trab, nome, partes, saida, formato=None):
     # Partes de câmeras diferentes (4K/60 + 1080/30): "formato" no plano iguala tudo para emendar.
     escala = ""
     if formato: fps = formato["fps"]; escala = f",scale={formato['w']}:{formato['h']}:flags=lanczos,setsar=1"
+    elif HD:
+        # --hd: corte que vai seguir para a edição no Atlas sai já em 1080 (1080x1920 vertical) e 30 qps, que é o
+        # que o Atlas usa. Cortar um 4K/60 em 4K/60 levou 7 min e 513 MB para 66 s, e o Atlas reduzia depois.
+        # Sem --hd: resolução original (regra do Daniel quando o corte é a entrega).
+        fps = min(fps, 30)
+        escala = (",scale='if(gt(iw,ih),1920,1080)':'if(gt(iw,ih),1080,1920)'"
+                  ":force_original_aspect_ratio=decrease:flags=lanczos,pad=ceil(iw/2)*2:ceil(ih/2)*2,setsar=1")
     # O áudio de todas as partes vai num f32 só e vira AAC uma vez, no fim. Emendar AAC por pedaço (-c copy)
     # soma ~40 ms de atraso e um bolsão de silêncio em cada costura (10 partes = boca fora de sincronia no fim).
     todo = open(f"{tmp}/audio.f32", "wb")
@@ -111,9 +142,9 @@ def render(trab, nome, partes, saida, formato=None):
             expr = "+".join(f"between(t,{a - 1e-4:.4f},{b - 1e-4:.4f})" for a, b in lote)
             sel = f"{tmp}/sel{i}_{g}.txt"; mp4 = f"{tmp}/p{i}_{g}.mp4"
             open(sel, "w").write(f"select='{expr}',setpts=N/{sfps}/TB{escala}")
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{max(0, lote[0][0] - 2):.3f}", "-to", f"{lote[-1][1] + 1:.3f}",
+            subprocess.run(["ffmpeg", "-v", "error", "-y", *DECODE_GPU, "-ss", f"{max(0, lote[0][0] - 2):.3f}", "-to", f"{lote[-1][1] + 1:.3f}",
                             "-copyts", "-i", video, "-/filter:v", sel, "-map", "0:v:0",
-                            "-fps_mode", "cfr", "-r", str(fps), "-c:v", "libx264", "-preset", "medium", "-crf", "16",
+                            "-fps_mode", "cfr", "-r", str(fps), *h264(16),
                             "-pix_fmt", "yuv420p", mp4], check=True)
             pedacos.append(mp4)
     todo.close()
@@ -128,6 +159,8 @@ def render(trab, nome, partes, saida, formato=None):
     print(f"{nome}: {total:.1f}s -> {final}", flush=True)
 
 if __name__ == "__main__":
-    trab = os.path.expanduser(sys.argv[1]); p = plano(trab)
-    nomes = sys.argv[2:] or list(p["cortes"])
+    HD = "--hd" in sys.argv or os.environ.get("PERFECT_CUT_HD") == "1"
+    args = [a for a in sys.argv[1:] if a != "--hd"]
+    trab = os.path.expanduser(args[0]); p = plano(trab)
+    nomes = args[1:] or list(p["cortes"])
     for n in nomes: render(trab, n, p["cortes"][n], p["saida"], p.get("formato", {}).get(n))

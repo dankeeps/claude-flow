@@ -29,9 +29,55 @@ export function carregar() {
     if (!fs.existsSync(dirBots)) continue;
     for (const b of fs.readdirSync(dirBots)) {
       const bot = lerJSON(path.join(dirBots, b, 'bot.json'));
-      if (bot) bots.set(bot.id, { ...bot, status: 'ocioso', fila: 0 });
+      if (bot) bots.set(bot.id, migrarBot({ ...bot, status: 'ocioso', fila: 0 }));
     }
   }
+  // Conectores agora são do squad. Squad antigo: começa com tudo o que os bots dele já usavam.
+  for (const sq of squads.values()) {
+    if (Array.isArray(sq.conectores)) continue;
+    sq.conectores = [...new Set(botsDoSquad(sq.id).flatMap((b) => b.conectores || []))];
+    salvarSquad(sq);
+  }
+}
+
+// Bots criados antes das mudanças: o Editor passa a ser "pesado" e a guardar edições e B-rolls na pasta dele.
+function migrarBot(bot) {
+  let mudou = false;
+  if (bot.template === 'editor') {
+    if (bot.pesado === undefined) { bot.pesado = true; mudou = true; }
+    const env = { ...(bot.env || {}) };
+    const novos = { ESTUDIO_RAIZ: '{{bot}}/trabalho/edicoes', ESTUDIO_BROLLS: '{{bot}}/trabalho/b-rolls', SHORTS_TRABALHO: '{{bot}}/trabalho/edicoes/_shorts' };
+    for (const [k, v] of Object.entries(novos)) {
+      if (!env[k] || (k === 'SHORTS_TRABALHO' && !String(env[k]).includes('{{bot}}'))) { env[k] = v; mudou = true; }
+    }
+    bot.env = env;
+  }
+  // Sem o prefixo "Bot" no nome ("Bot Editor" -> "Editor") e avatar de planeta no lugar do símbolo antigo.
+  if (/^bot\s+\S/i.test(bot.nome || '')) { bot.nome = bot.nome.replace(/^bot\s+/i, ''); mudou = true; }
+  if (bot.avatar && !bot.avatar.planeta) {
+    const planetas = ['mercurio', 'venus', 'terra', 'marte', 'jupiter', 'saturno', 'urano', 'netuno', 'lua', 'plutao', 'sol'];
+    let h = 0;
+    for (const ch of String(bot.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    bot.avatar = { planeta: bot.template === 'editor' ? 'jupiter' : planetas[h % planetas.length] };
+    mudou = true;
+  }
+  if (mudou) salvarBot(bot);
+  return bot;
+}
+
+// Os conectores que um bot usa são os do squad dele (todos os bots do squad usam os mesmos).
+export function conectoresDoBot(bot) {
+  return squads.get(bot.squad)?.conectores || bot.conectores || [];
+}
+
+// Liga no squad os conectores que um template precisa (ex.: Bot Editor -> Navegador, Atlas, Drive).
+export function garantirConectoresNoSquad(squadId, ids = []) {
+  const sq = squads.get(squadId);
+  if (!sq || !ids.length) return;
+  const atual = new Set(sq.conectores || []);
+  const antes = atual.size;
+  for (const id of ids) atual.add(id);
+  if (atual.size !== antes) { sq.conectores = [...atual]; salvarSquad(sq); }
 }
 
 export function salvarSquad(sq) {
@@ -44,7 +90,7 @@ export function salvarBot(bot) {
 }
 
 export function criarSquad({ nome, descricao = '' }) {
-  const sq = { id: slug(nome), nome: String(nome).trim(), descricao, criado: Date.now() };
+  const sq = { id: slug(nome), nome: String(nome).trim(), descricao, criado: Date.now(), conectores: [] };
   fs.mkdirSync(path.join(dirSquad(sq.id), 'bots'), { recursive: true });
   salvarSquad(sq);
   squads.set(sq.id, sq);
@@ -57,7 +103,7 @@ export function novoBotBase({ squad, nome, template }) {
     squad,
     nome: String(nome).trim(),
     template,
-    avatar: null, // { glifo, cor, fundo } — desenhado pelo app (web/avatar.js)
+    avatar: null, // { planeta } — desenhado pelo app (web/avatar.js)
     criado: Date.now(),
     modelo: '',
     esforco: '',
@@ -77,12 +123,11 @@ export function novoBotBase({ squad, nome, template }) {
   };
 }
 
-// O avatar é só três nomes curtos; qualquer outra coisa é descartada.
+// O avatar é só o nome de um planeta (o app desenha); qualquer outra coisa é descartada.
 export function limparAvatar(av) {
   if (!av || typeof av !== 'object') return null;
-  const id = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24);
-  const out = { glifo: id(av.glifo), cor: id(av.cor), fundo: av.fundo === 'escuro' ? 'escuro' : 'cor' };
-  return out.glifo && out.cor ? out : null;
+  const planeta = String(av.planeta || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 24);
+  return planeta ? { planeta } : null;
 }
 
 export function publicoBot(bot) {

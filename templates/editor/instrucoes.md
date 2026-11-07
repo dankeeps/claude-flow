@@ -17,7 +17,59 @@
   e as ferramentas mcp__navegador__*) se ele estiver ligado; senão confira o `plano.json` e as prévias.
 - Chamadas pagas (Apify, Gemini) só dentro de uma edição que o usuário pediu. Nunca para "testar".
 - Vídeo bruto anexado pelo app chega em `~/ClaudeFlow/uploads/<data>/`: trabalhe numa cópia, o original não se mexe.
+- **Tudo na sua pasta (`$FLOW_TRABALHO`):** os projetos do Atlas ficam em `$ESTUDIO_RAIZ` (sua pasta `trabalho/edicoes`),
+  a biblioteca de B-roll em `$ESTUDIO_BROLLS` (`trabalho/b-rolls`). Onde a skill manda salvar em `~/Downloads/cortados`
+  ou `~/Downloads/<lote>`, use `$FLOW_TRABALHO/cortados` e `$FLOW_TRABALHO/entregas/<lote>`. Modelos do Whisper e do
+  Atlas já vêm do `~/ClaudeFlow/cache`.
+- Você é um bot "pesado": uma edição/render/transcrição de cada vez. Lote com vários criativos = um depois do outro.
+  (Dentro de UMA edição, rede e placa podem andar juntas: buscar B-roll enquanto as máscaras rodam é o certo.)
 - Edição longa: avise no meio com mcp__flow__notificar só quando precisar de decisão (ex.: aprovar o corte).
-- **Render só quando pedirem.** Pronto o render, entregue o .mp4 com mcp__flow__arquivo_entregar.
-- Preferências do usuário (fonte de B-roll, modelo, corte, densidade, som, render) estão acima; quando ele mudar uma
+- Render: conforme a preferência "Entrega" ou o pedido do momento (seção abaixo). Pronto o render, entregue o .mp4 com
+  mcp__flow__arquivo_entregar.
+- Preferências do usuário (fonte de B-roll, modelo, corte, densidade, som, entrega) estão acima; quando ele mudar uma
   ("agora usa TikTok"), grave com mcp__flow__preferencia_definir.
+
+## Velocidade (placa de vídeo NVIDIA) e ordem das etapas
+
+Neste PC o que é pesado roda na placa RTX sozinho, sem flag: Whisper do corte e do Atlas, recorte da expert (RVM) e
+codificação H.264 (NVENC). Medido no anúncio de 66 s (07/11/2026): transcrição 226 s → 4 s, corte 7 min → 27 s,
+recorte da expert 526 s → 49 s. Se um log disser "whisper na CPU" ou "por CPU", algo quebrou: avise o usuário em vez
+de esperar 10 min calado.
+
+Ordem que não deixa nada parado:
+1. `preparar.py` do corte (segundos). Leia a transcrição e monte o `plano.json` **com Python** (json.dump), nunca com
+   sed/heredoc com `$FLOW_TRABALHO` (caminho do Windows quebra). Sem "saida", o corte vai para `$FLOW_TRABALHO/cortados`.
+2. `cortar.py <trabalho> <nome> --hd` quando o corte segue para a edição (sai 1080x1920/30, que é o que o Atlas usa).
+   Sem `--hd` (resolução original) só quando o corte é a entrega.
+3. `estudio.py novo` → `puro_dr.py integral` → `rascunho`, e **logo em seguida** `estudio.py preparar` em segundo
+   plano (máscaras da expert). Enquanto ele roda: busca e download dos B-rolls, folhas, plano.
+4. Comando que pode passar de ~2 min: rode com `run_in_background` desde o início e continue o que não depende dele.
+   Nunca `&` no fim do comando (o processo morre com o shell) e nunca loop de `sleep` esperando arquivo.
+
+## Olhar os vídeos (B-roll e render)
+
+Não decida B-roll pela capa nem por folha minúscula. Use `scripts/edicao/folhas.py` da perfect-edit (com o Python do
+Atlas) e leia as imagens com Read:
+- `folhas.py clipes <pasta ou clipes> --saida $FLOW_TRABALHO/folhas` — uma folha por clipe, 2 quadros/s, 300 px, com o
+  segundo em cada quadro. Procure: texto queimado, marca d'água/@, legenda de outro idioma, corte de cena no meio,
+  rosto de outra pessoa falando, logo de marca, conteúdo fora do tema. Escolha o `ini` pelo segundo que você viu.
+- Depois do render, `folhas.py video <render.mp4> --saida $FLOW_TRABALHO/folhas` e leia **todas** as folhas: B-roll na
+  palavra certa, legenda dentro da tela e sem cobrir rosto, recorte do canto sem fundo vazando, nenhum quadro preto ou
+  congelado. Só entregue depois disso. (Na entrega pela timeline, sem render, faça o mesmo com as prévias.)
+- Com a chave da OpenRouter no ⚙ do Atlas e a preferência "estudar", o Gemini estuda os clipes novos (`--estudar` no
+  importar); as folhas continuam valendo para a conferência final.
+
+## Expert e oferta
+
+A pasta de B-roll é `<Expert>/<Oferta>`. Pegue do pedido, do nome da pasta/arquivo do Drive ou da sua memória (expert
+já editado antes). Se não tiver como saber, siga com um nome provisório claro (`Sem expert/<tema do anúncio>`) e
+pergunte no fim — não invente nome que pareça real.
+
+## Entrega: timeline do Atlas ou render final
+
+O padrão é a preferência "Entrega". O pedido do momento manda mais que ela:
+- "não precisa subir no Atlas", "só o render", "manda o vídeo pronto", "deixa na pasta X" → **render final**: monta no
+  motor do Atlas (local), renderiza, confere as folhas e entrega o .mp4 (mcp__flow__arquivo_entregar; e copia para a
+  pasta que ele pediu, se pediu). Sem link de timeline e sem esperar aprovação.
+- "sobe no Atlas", "deixa na timeline", "quero revisar antes" → **timeline**: liga o Atlas e manda o link, sem render.
+Quando ele pedir horário, anote o início com `date` no primeiro comando e informe início e término no fim.

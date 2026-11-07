@@ -46,7 +46,9 @@ na ordem do roteiro, resolução original, com o nome do anúncio que está no r
    vem da chave do outro anúncio. Bruto sem fala → `conferir.py <trab> quadro chave:5` e olhe a imagem.
 4. **plano.json** (`keep` por índices ou `{"t":[a,b]}`, `fora` por tempo, `manter` = trecho que o corte de energia não
    pode picar, `"formato"` para juntar câmeras diferentes — veja `plano.exemplo.json`) e
-   `$PYC $SC/cortar.py <trab> NOME` — **um primeiro**, confira, depois os outros.
+   `$PYC $SC/cortar.py <trab> NOME` — **um primeiro**, confira, depois os outros. Corte que vai seguir para a edição no
+   Atlas: `cortar.py <trab> NOME --hd` (sai 1080x1920/30). Sem `--hd`, resolução original. Com placa NVIDIA, Whisper,
+   decodificação e H.264 vão para a placa sozinhos (o log diz "whisper na placa de vídeo").
 5. **Três rodadas de revisão, sempre**: (1) leitura + escuta dos duvidosos antes do plano; (2) `conferir.py <trab> pausas`
    (meta 0 ≥ 0,2 s, A/V ≤ 2 quadros) e `conferir.py <trab> texto`; (3) ouvir com `janela NOME:ini:fim` cada `delete`,
    `insert` > 1 palavra e palavra deformada — **insert de frase inteira = retomada escondida** → `fora`, renderizar de novo,

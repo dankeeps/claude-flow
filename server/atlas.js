@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { HOME, IS_WIN, config, expandir } from './config.js';
+import { bots } from './store.js';
+import { pastasCentrais, expandirBot } from './runner.js';
 
 export async function noAr() {
   try {
@@ -20,6 +22,23 @@ export function onde() {
   return { dir, py, servidor, instalado: fs.existsSync(py) && fs.existsSync(servidor) };
 }
 
+// O Atlas mostra os projetos e a biblioteca de B-roll do Bot Editor: as pastas ficam dentro do bot, no ~/ClaudeFlow
+// (as mesmas que o bot usa: ESTUDIO_RAIZ / ESTUDIO_BROLLS no env dele). Modelos e temporários no ~/ClaudeFlow/cache.
+export function envAtlas() {
+  const editor = [...bots.values()].find((b) => b.template === 'editor');
+  const env = { ...pastasCentrais() };
+  if (editor) {
+    for (const k of ['ESTUDIO_RAIZ', 'ESTUDIO_BROLLS']) {
+      if (editor.env?.[k]) {
+        env[k] = expandir(expandirBot(editor, editor.env[k]));
+        fs.mkdirSync(env[k], { recursive: true });
+      }
+    }
+  }
+  fs.mkdirSync(env.TEMP, { recursive: true });
+  return env;
+}
+
 export async function ligar() {
   if (await noAr()) return { jaEstava: true, url: config.atlas.url };
   const a = onde();
@@ -29,7 +48,7 @@ export async function ligar() {
   const log = fs.openSync(path.join(HOME, 'logs', 'atlas.log'), 'a');
   const p = spawn(a.py, [a.servidor], {
     cwd: a.dir, detached: true, windowsHide: true, stdio: ['ignore', log, log],
-    env: { ...process.env, PORTA: porta, PYTHONUTF8: '1' },
+    env: { ...process.env, ...envAtlas(), PORTA: porta, PYTHONUTF8: '1' },
   });
   p.unref();
   for (let i = 0; i < 60; i++) {

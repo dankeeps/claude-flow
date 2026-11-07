@@ -4,7 +4,7 @@
 - B-roll gringo (termos em inglês, criadores dos EUA), com "aesthetic / raw / no text / cinematic" nos termos.
 - Legenda logo abaixo do pescoço do expert; no meio da tela na dividida e no canto.
 - VSL sem música. Prévia tem que ser igual ao vídeo final.
-- Corte: zero pausa entre palavras, um arquivo por anúncio, na ordem do roteiro, resolução original.
+- Corte: zero pausa entre palavras, um arquivo por anúncio, na ordem do roteiro, resolução original quando o corte é a entrega (cortar.py --hd só quando segue para o Atlas).
 - Depois que o Daniel mexeu na timeline do Atlas, nunca rodar `plano --forcar` (apaga o que ele fez).
-- Projetos do Atlas em ~/Edições/<nome>; B-rolls em ~/Octo Edição/B-rolls/<workspace>/<Expert>/<Oferta>/<Categoria>/.
+- Projetos do Atlas em $ESTUDIO_RAIZ (trabalho/edicoes); B-rolls em $ESTUDIO_BROLLS (trabalho/b-rolls)/<Expert>/<Oferta>/<Categoria>/.
 - YouTube: baixar um Short de cada vez com pausa; em paralelo ele bloqueia ("Sign in to confirm you're not a bot").

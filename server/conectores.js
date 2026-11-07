@@ -1,12 +1,18 @@
-// Monta, para cada turno, o arquivo --mcp-config do bot: o servidor "flow" (squad, memória, notificação), o
-// navegador (Playwright MCP ligado no Chrome do Claude Flow) e os conectores stdio/http que o bot tem ligados.
-// Os conectores da conta claude.ai (Gmail, Drive…) chegam sozinhos no CLI: os que o bot NÃO tem ligados são
-// bloqueados com --disallowedTools mcp__claude_ai_<Nome>.
+// Conectores: o catálogo (conectores/catalogo.json) + as contas extras do usuário (~/ClaudeFlow/contas.json).
+// Cada item da lista é uma "instância": a conta principal de cada conector do catálogo, mais as contas a mais dos
+// conectores com multiContas (ex.: um segundo token da Apify, outra conta Google). Quem escolhe o que usar é o squad:
+// todos os bots do squad recebem os mesmos conectores.
+//
+// Para cada turno monta o --mcp-config do bot: o servidor "flow" (squad, memória, notificação), o navegador
+// (Playwright MCP ligado no Chrome do Claude Flow) e os conectores stdio/http ligados no squad. Os conectores da conta
+// claude.ai (Gmail, Drive…) chegam sozinhos no CLI: os desligados no squad são bloqueados com --disallowedTools.
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { createRequire } from 'node:module';
-import { REPO, IS_WIN, lerJSON, segredos } from './config.js';
-import { dirBot } from './store.js';
+import spawn from 'cross-spawn';
+import { REPO, HOME, IS_WIN, config, expandir, lerJSON, gravarJSON, segredos } from './config.js';
+import { dirBot, conectoresDoBot } from './store.js';
 import { perfilDoBot, endpoint } from './navegador.js';
 
 const require = createRequire(import.meta.url);
@@ -14,10 +20,92 @@ export const catalogo = () => lerJSON(path.join(REPO, 'conectores', 'catalogo.js
 
 export const prefixoClaudeAi = (servidor) => `mcp__${servidor.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
+// ---------- contas extras e campos por conta ----------
+const ARQ_CONTAS = path.join(HOME, 'contas.json');
+const lerContas = () => ({ contas: [], campos: {}, ...lerJSON(ARQ_CONTAS, {}) });
+const gravarContas = (d) => gravarJSON(ARQ_CONTAS, d);
+
+// Chave de uma conta extra: APIFY_TOKEN da conta "apify-2" fica salva como APIFY_TOKEN__APIFY_2.
+const sufixo = (instId) => instId.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+export function nomeChave(inst, s) {
+  return inst.extra && !s.compartilhado ? `${s.nome}__${sufixo(inst.id)}` : s.nome;
+}
+
+export function instancias() {
+  const cat = catalogo();
+  const { contas, campos } = lerContas();
+  const porId = new Map(cat.map((c) => [c.id, c]));
+  const lista = cat.map((c) => ({ ...c, base: c.id, extra: false, campos: campos[c.id] || {} }));
+  for (const k of contas) {
+    const c = porId.get(k.base);
+    if (!c) continue;
+    lista.push({ ...c, id: k.id, base: c.id, extra: true, rotuloConta: k.nome, nome: `${c.nome} · ${k.nome}`, campos: campos[k.id] || {} });
+  }
+  return lista;
+}
+
+export function criarConta({ base, nome }) {
+  const c = catalogo().find((x) => x.id === base);
+  if (!c) throw Object.assign(new Error('conector desconhecido'), { status: 400 });
+  if (!c.multiContas) throw Object.assign(new Error(`${c.nome} não aceita mais de uma conta`), { status: 400 });
+  const rotulo = String(nome || '').trim().slice(0, 40);
+  if (!rotulo) throw Object.assign(new Error('dê um nome para a conta (ex.: Trabalho)'), { status: 400 });
+  const d = lerContas();
+  let n = 2;
+  while (d.contas.some((k) => k.id === `${base}-${n}`)) n++;
+  const conta = { id: `${base}-${n}`, base, nome: rotulo, criado: Date.now() };
+  d.contas.push(conta);
+  gravarContas(d);
+  return conta;
+}
+
+export function renomearConta(id, nome) {
+  const d = lerContas();
+  const k = d.contas.find((x) => x.id === id);
+  if (!k) throw Object.assign(new Error('conta não encontrada'), { status: 404 });
+  k.nome = String(nome || '').trim().slice(0, 40) || k.nome;
+  gravarContas(d);
+  return k;
+}
+
+// Tira a conta extra da lista. Devolve os nomes das chaves dela, para o servidor apagar de segredos.env.
+export function removerConta(id) {
+  const d = lerContas();
+  const k = d.contas.find((x) => x.id === id);
+  if (!k) throw Object.assign(new Error('conta não encontrada'), { status: 404 });
+  const inst = instancias().find((x) => x.id === id);
+  d.contas = d.contas.filter((x) => x.id !== id);
+  delete d.campos[id];
+  gravarContas(d);
+  return (inst?.segredos || []).filter((s) => !s.compartilhado).map((s) => nomeChave(inst, s));
+}
+
+export function gravarCampos(instId, campos = {}) {
+  const inst = instancias().find((x) => x.id === instId);
+  if (!inst) throw Object.assign(new Error('conector não encontrado'), { status: 404 });
+  const d = lerContas();
+  const aceitos = new Set((inst.camposConta || []).map((c) => c.nome));
+  const novos = Object.fromEntries(Object.entries(campos).filter(([k]) => aceitos.has(k)).map(([k, v]) => [k, String(v ?? '').trim()]));
+  d.campos[instId] = { ...(d.campos[instId] || {}), ...novos };
+  gravarContas(d);
+  return d.campos[instId];
+}
+
+// Valores que entram no ${...} de uma instância: as chaves (com as da própria conta no lugar), os campos dela
+// (ex.: EMAIL) e ${PASTA_CONTA}, uma pasta só desta conta (logins/tokens que o servidor MCP guarda).
+function valoresDaInstancia(inst, chaves) {
+  const v = { ...chaves };
+  for (const s of inst.segredos || []) v[s.nome] = chaves[nomeChave(inst, s)];
+  Object.assign(v, inst.campos || {});
+  v.PASTA_CONTA = path.join(HOME, 'contas', inst.id);
+  v.CONTA = inst.id;
+  return v;
+}
+
 function trocar(valor, chaves, faltando) {
   if (typeof valor === 'string') {
     return valor.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, k) => {
-      if (chaves[k] === undefined) { faltando.add(k); return ''; }
+      if (chaves[k] === undefined || chaves[k] === '') { faltando.add(k); return ''; }
       return chaves[k];
     });
   }
@@ -26,8 +114,20 @@ function trocar(valor, chaves, faltando) {
   return valor;
 }
 
-// No Windows, npx/uvx como servidor MCP precisam de "cmd /c".
+// uvx instalado depois que o servidor ligou não está no PATH dele: procura nos lugares de instalação conhecidos.
+function acharUvx() {
+  const exe = IS_WIN ? 'uvx.exe' : 'uvx';
+  const locais = [path.join(os.homedir(), '.local', 'bin', exe), path.join(os.homedir(), '.cargo', 'bin', exe)];
+  const winget = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages');
+  if (IS_WIN && fs.existsSync(winget)) {
+    for (const d of fs.readdirSync(winget)) if (d.startsWith('astral-sh.uv')) locais.push(path.join(winget, d, exe));
+  }
+  return locais.find((p) => fs.existsSync(p)) || null;
+}
+
+// No Windows, npx/uvx como servidor MCP precisam de "cmd /c" (uvx achado pelo caminho completo roda direto).
 function comando(cmd, args) {
+  if (cmd === 'uvx') { const uvx = acharUvx(); if (uvx) return { command: uvx, args }; }
   if (IS_WIN && ['npx', 'uvx', 'npm', 'pnpm'].includes(cmd)) return { command: 'cmd', args: ['/c', cmd, ...args] };
   return { command: cmd, args };
 }
@@ -42,9 +142,12 @@ function playwrightCli() {
   } catch { return null; }
 }
 
+// Nome do servidor MCP de uma instância (vira o prefixo das ferramentas: mcp__<nome>__...).
+const nomeServidor = (inst) => inst.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+
 export function montarMcp(bot, { flowUrl }) {
   const chaves = segredos();
-  const ligados = new Set(bot.conectores || []);
+  const ligados = new Set(conectoresDoBot(bot));
   const servidores = {
     flow: {
       type: 'stdio',
@@ -57,10 +160,10 @@ export function montarMcp(bot, { flowUrl }) {
   const avisos = [];
   const ativos = [];
 
-  for (const c of catalogo()) {
+  for (const c of instancias()) {
     const on = ligados.has(c.id);
     if (c.tipo === 'claudeai') {
-      if (on) ativos.push(c); else bloquear.push(prefixoClaudeAi(c.servidor));
+      if (on) ativos.push({ ...c, prefixo: prefixoClaudeAi(c.servidor) }); else bloquear.push(prefixoClaudeAi(c.servidor));
       continue;
     }
     if (!on) continue;
@@ -74,23 +177,26 @@ export function montarMcp(bot, { flowUrl }) {
         command: process.execPath,
         args: [cli, '--cdp-endpoint', endpoint(perfil), '--output-dir', path.join(dirBot(bot), 'trabalho', 'navegador')],
       };
-      ativos.push(c);
+      ativos.push({ ...c, prefixo: 'mcp__navegador' });
       continue;
     }
     if (c.tipo === 'atlas') { ativos.push(c); continue; }
     const faltando = new Set();
+    const valores = valoresDaInstancia(c, chaves);
+    const nome = nomeServidor(c);
     if (c.tipo === 'stdio') {
-      const { command, args } = comando(c.comando, trocar(c.args || [], chaves, faltando));
-      servidores[c.id] = { type: 'stdio', command, args, env: trocar(c.env || {}, chaves, faltando) };
+      const { command, args } = comando(c.comando, trocar(c.args || [], valores, faltando));
+      servidores[nome] = { type: 'stdio', command, args, env: trocar(c.env || {}, valores, faltando) };
+      if (JSON.stringify(c.env || {}).includes('${PASTA_CONTA}')) fs.mkdirSync(valores.PASTA_CONTA, { recursive: true });
     } else if (c.tipo === 'http') {
-      servidores[c.id] = { type: 'http', url: trocar(c.url, chaves, faltando), ...(c.headers ? { headers: trocar(c.headers, chaves, faltando) } : {}) };
+      servidores[nome] = { type: 'http', url: trocar(c.url, valores, faltando), ...(c.headers ? { headers: trocar(c.headers, valores, faltando) } : {}) };
     }
     if (faltando.size) {
-      delete servidores[c.id];
-      avisos.push(`${c.nome}: falta a chave ${[...faltando].join(', ')} (Conectores > Chaves).`);
+      delete servidores[nome];
+      avisos.push(`${c.nome}: falta configurar ${[...faltando].join(', ')} (tela Conectores).`);
       continue;
     }
-    ativos.push(c);
+    ativos.push({ ...c, prefixo: `mcp__${nome}` });
   }
 
   const arq = path.join(dirBot(bot), '.flow', 'mcp.json');
@@ -99,12 +205,56 @@ export function montarMcp(bot, { flowUrl }) {
   return { arquivo: arq, bloquear, avisos, ativos };
 }
 
-export function statusConectores() {
-  const chaves = segredos();
-  return catalogo().map((c) => ({
-    ...c,
-    chavesOk: (c.segredos || []).every((s) => chaves[s.nome]),
-    segredos: (c.segredos || []).map((s) => ({ ...s, salva: !!chaves[s.nome] })),
-  }));
+// ---------- status real dos conectores da conta claude.ai ("claude mcp list") ----------
+let statusClaude = {}; // "claude.ai Gmail" -> connected | needs-auth | failed
+let statusQuando = 0;
+let consultando = null;
+
+export function atualizarStatusClaude() {
+  if (consultando) return consultando;
+  consultando = new Promise((resolve) => {
+    const bin = config.claudeBin ? expandir(config.claudeBin) : (process.env.CLAUDE_BIN || 'claude');
+    const env = { ...process.env };
+    delete env.CLAUDECODE;
+    let saida = '';
+    let p;
+    try { p = spawn(bin, ['mcp', 'list'], { cwd: HOME, windowsHide: true, env }); } catch { consultando = null; resolve(statusClaude); return; }
+    const fim = setTimeout(() => p.kill(), 90_000);
+    p.stdout.on('data', (d) => { saida += d; });
+    p.on('error', () => {});
+    p.on('close', () => {
+      clearTimeout(fim);
+      const novo = {};
+      for (const linha of saida.split(/\r?\n/)) {
+        const m = linha.match(/^(claude\.ai [^:]+):.*\s-\s+(.+)$/);
+        if (!m) continue;
+        const t = m[2].toLowerCase();
+        novo[m[1].trim()] = t.includes('connected') ? 'connected' : t.includes('auth') ? 'needs-auth' : 'failed';
+      }
+      if (Object.keys(novo).length) { statusClaude = novo; statusQuando = Date.now(); }
+      consultando = null;
+      resolve(statusClaude);
+    });
+  });
+  return consultando;
 }
 
+// Situação de cada conector para o app (as chaves nunca saem daqui, só "salva" ou não):
+// conectado | entrar (refazer login no claude.ai) | falhou | desconectado | verificando | configurar | login | local
+export function statusConectores() {
+  const chaves = segredos();
+  return instancias().map((c) => {
+    const segs = (c.segredos || []).map((s) => ({ ...s, chave: nomeChave(c, s), salva: !!chaves[nomeChave(c, s)] }));
+    const camposOk = (c.camposConta || []).every((k) => c.campos?.[k.nome]);
+    let situacao;
+    if (c.tipo === 'claudeai') {
+      const st = statusClaude[c.servidor];
+      situacao = st === 'connected' ? 'conectado' : st === 'needs-auth' ? 'entrar' : st === 'failed' ? 'falhou' : statusQuando ? 'desconectado' : 'verificando';
+    } else if (c.tipo === 'navegador' || c.tipo === 'atlas') situacao = 'local';
+    else if (c.oauth) situacao = 'login';
+    else situacao = segs.every((s) => s.salva) && camposOk ? 'conectado' : 'configurar';
+    return { ...c, segredos: segs, chavesOk: segs.every((s) => s.salva), camposOk, situacao };
+  });
+}
+
+export const idValido = (id) => instancias().some((c) => c.id === id);

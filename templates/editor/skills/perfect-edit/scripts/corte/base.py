@@ -9,13 +9,43 @@ MODELOS = os.path.expanduser(os.environ.get("PERFECT_CUT_MODELOS", "~/.cache/per
 _modelo = None
 
 
+def _libs_nvidia():
+    """No Windows, as DLLs do CUDA instaladas por pip (nvidia-cublas-cu12...) ficam em site-packages/nvidia/*/bin."""
+    if os.name != "nt": return
+    import site
+    for sp in site.getsitepackages():
+        raiz = os.path.join(sp, "nvidia")
+        if os.path.isdir(raiz):
+            for d in os.listdir(raiz):
+                b = os.path.join(raiz, d, "bin")
+                if os.path.isdir(b):
+                    os.add_dll_directory(b); os.environ["PATH"] = b + os.pathsep + os.environ["PATH"]
+
+
+def dispositivo():
+    """PERFECT_CUT_DEVICE manda; sem ele, usa a placa NVIDIA quando ela e o cuBLAS estão disponíveis."""
+    dev = os.environ.get("PERFECT_CUT_DEVICE", "auto")
+    if dev != "auto": return dev
+    try:
+        import ctranslate2
+        if ctranslate2.get_cuda_device_count() < 1: return "cpu"
+        _libs_nvidia()
+        if os.name == "nt":
+            import ctypes; ctypes.WinDLL("cublas64_12.dll")
+        return "cuda"
+    except Exception:
+        return "cpu"
+
+
 def modelo():
-    """Whisper large-v3-turbo na CPU (int8). Baixa uma vez para ~/.cache/perfect-cut/whisper.
-    PERFECT_CUT_DEVICE=cuda usa a placa NVIDIA (Windows/Linux, precisa do CUDA 12 + cuDNN 9)."""
+    """Whisper large-v3-turbo: na placa NVIDIA (float16) quando dá, senão na CPU (int8).
+    Baixa uma vez para ~/.cache/perfect-cut/whisper. PERFECT_CUT_DEVICE=cpu|cuda força um dos dois."""
     global _modelo
     if _modelo is None:
         from faster_whisper import WhisperModel
-        dev = os.environ.get("PERFECT_CUT_DEVICE", "cpu")
+        dev = dispositivo()
+        if dev == "cuda": _libs_nvidia()
+        print(f"whisper na {'placa de vídeo' if dev == 'cuda' else 'CPU'}", file=sys.stderr, flush=True)
         _modelo = WhisperModel(os.environ.get("PERFECT_CUT_WHISPER", "large-v3-turbo"), device=dev,
                                compute_type="int8" if dev == "cpu" else "float16",
                                cpu_threads=max(1, os.cpu_count() or 8), download_root=os.path.join(MODELOS, "whisper"))
@@ -35,7 +65,14 @@ def gravar_json(p, d): json.dump(d, open(p, "w"), ensure_ascii=False)
 
 def plano(trab):
     p = ler_json(os.path.join(trab, "plano.json"))
-    p["saida"] = os.path.expanduser(p.get("saida", "~/Downloads/cortados"))
+    # Sem "saida" (ou com caminho solto tipo "/cortados", que no Windows vira C:\cortados): vai para
+    # <pasta de trabalho do bot>/cortados no Claude Flow, ou para a pasta "cortados" ao lado do trabalho.
+    s = os.path.expanduser(p.get("saida") or "")
+    absoluto = os.path.isabs(s) and (os.name != "nt" or (len(s) > 2 and s[1] == ":"))
+    if not s or not absoluto or os.path.normpath(s).rstrip("\\/").count(os.sep) < 2:
+        base_ = os.environ.get("FLOW_TRABALHO") or os.path.dirname(os.path.abspath(trab))
+        s = os.path.join(base_, "cortados")
+    p["saida"] = s
     return p
 
 

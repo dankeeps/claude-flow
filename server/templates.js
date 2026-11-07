@@ -45,6 +45,7 @@ export function criarBot({ squad, nome, template: tid = 'em-branco', funcao = ''
   bot.conectores = [...(t.conectores || [])];
   bot.navegador = t.navegador ?? 'principal';
   bot.autonomia = t.autonomia || 'total';
+  bot.pesado = !!t.pesado; // trabalho pesado: um de cada vez no computador
   bot.pastas = (t.pastas || []).map((p) => resolver(p, t.id));
   bot.env = Object.fromEntries(Object.entries(t.env || {}).map(([k, v]) => [k, resolver(v, t.id)]));
   bot.prefs = Object.fromEntries((t.preferencias || []).map((p) => [p.chave, p.padrao ?? '']));
@@ -60,6 +61,7 @@ export function criarBot({ squad, nome, template: tid = 'em-branco', funcao = ''
   gravarJSON(path.join(dir, '.claude', 'settings.json'), lerJSON(path.join(base, 'settings.json'), {}));
   for (const s of t.skills) ligarSkill(path.join(base, 'skills', s), path.join(dir, '.claude', 'skills', s));
   bot.skills = [...t.skills];
+  ligarHabilidades(bot);
 
   salvarBot(bot);
   bots.set(bot.id, { ...bot, status: 'ocioso', fila: 0 });
@@ -72,6 +74,26 @@ Esta pasta é do bot. O Claude Flow cuida de \`funcao.md\`, \`memoria.md\`, \`pr
 não edite esses arquivos à mão, use as ferramentas \`mcp__flow__*\` (elas respeitam o limite de tamanho).
 Arquivos de trabalho vão em \`trabalho/\`.
 `;
+
+// Habilidades do Claude Flow (pasta habilidades/ do repositório): valem para todos os bots, de qualquer template.
+// Ex.: baixar-do-drive (curl direto e em paralelo). Cada uma vira um atalho em <bot>/.claude/skills.
+const HABILIDADES = path.join(REPO, 'habilidades');
+export function habilidadesGerais() {
+  return fs.existsSync(HABILIDADES) ? fs.readdirSync(HABILIDADES).filter((s) => !s.startsWith('.') && fs.existsSync(path.join(HABILIDADES, s, 'SKILL.md'))) : [];
+}
+export function ligarHabilidades(bot) {
+  for (const s of habilidadesGerais()) ligarSkill(path.join(HABILIDADES, s), path.join(dirBot(bot), '.claude', 'skills', s));
+}
+
+// Nome e descrição de cada skill do bot (lidos do cabeçalho do SKILL.md), para a barra do bot.
+export function skillsComDescricao(bot) {
+  const gerais = new Set(habilidadesGerais());
+  return skillsDoBot(bot).map((nome) => {
+    const txt = lerTexto(path.join(dirBot(bot), '.claude', 'skills', nome, 'SKILL.md'));
+    const desc = /^description:\s*(.+)$/m.exec(txt)?.[1]?.trim() || '';
+    return { nome, descricao: desc.split(/(?<=\.)\s/)[0].slice(0, 220), geral: gerais.has(nome) };
+  });
+}
 
 export function skillsDoBot(bot) {
   const dir = path.join(dirBot(bot), '.claude', 'skills');

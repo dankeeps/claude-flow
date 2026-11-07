@@ -78,6 +78,9 @@ ficha pelo `$PYA $L/gemini.py estudar "<arquivo>"`, `$E acervo "<projeto>" --pas
 - ~US$ 0,01 por clipe; cada clipe é estudado **uma vez** e a ficha fica no `biblioteca.json` (`itens[ID].estudo`).
 - A ficha erra: "limpo" às vezes fala da ação e não do texto (B0046 tinha "CHOOSE HARD" pintado na parede o vídeo todo).
   Respeite a janela limpa inteira (o `ini` **e** o fim), e olhe os quadros antes de pôr no anúncio.
+- Olhar os quadros = `$PYA scripts/edicao/folhas.py clipes <clipes ou pasta>` (desta skill): 2 quadros/s a 300 px com o
+  segundo escrito em cada um. Texto queimado, marca d'água e corte no meio aparecem ali; na folha de 120 px não aparecem.
+  Depois do render: `folhas.py video <render.mp4>` e leia todas as folhas antes de entregar.
 - `puro_dr.py assistir "<projeto>"`: o Gemini assiste o último render inteiro e aponta problemas (~US$ 0,02), só se ele pedir.
 
 ## Triagem fora do Atlas (lote de B-roll para entregar)
