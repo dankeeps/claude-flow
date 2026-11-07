@@ -92,7 +92,7 @@ const ferramentas = {
     if (alvo.id === bot.id) throw new Error('Esse bot é você.');
     const cadeia = (runner.turnoAtivo(bot.id)?.cadeia || 0) + 1;
     if (cadeia > config.squad.maxCadeia) {
-      notificar({ titulo: `⏸ Conversa entre bots pausada`, texto: `${bot.nome} → ${alvo.nome}: ${config.squad.maxCadeia} mensagens seguidas sem você. Abra o squad para continuar.`, bot: bot.id, forcar: true });
+      notificar({ titulo: 'Conversa entre bots pausada', texto: `${bot.nome} → ${alvo.nome}: ${config.squad.maxCadeia} mensagens seguidas sem você. Abra o squad para continuar.`, bot: bot.id, forcar: true });
       throw new Error(`Limite de ${config.squad.maxCadeia} mensagens seguidas entre bots sem o usuário. Pare aqui e diga ao usuário o que falta decidir.`);
     }
     const origem = { tipo: 'bot', id: bot.id, nome: bot.nome };
@@ -202,7 +202,7 @@ const ferramentas = {
     aprovacoes.set(id, { id, espera: id, bot: bot.id, botNome: bot.nome, ferramenta: tool_name, entrada: input, resumo, criado: Date.now() });
     esp.aoExpirar = () => aprovacoes.delete(id);
     emitir('aprovacao', aprovacoes.get(id));
-    notificar({ titulo: `🔐 ${bot.nome} pede permissão`, texto: `${tool_name}: ${resumo}`, bot: bot.id, forcar: true, tag: `aprovacao-${id}` });
+    notificar({ titulo: `${bot.nome} pede permissão`, texto: `${tool_name}: ${resumo}`, bot: bot.id, forcar: true, tag: `aprovacao-${id}` });
     return { espera: id };
   },
 };

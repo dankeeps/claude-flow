@@ -9,7 +9,7 @@ Claude Code CLI.
 | camada | onde | quem escreve | entra em toda sessão? |
 |---|---|---|---|
 | **Função** | `funcao.md` | você ("sua função é…") ou o bot (`funcao_atualizar`) | sim |
-| **Preferências** | `bot.json` (as do template) + `preferencias.md` | você no ⚙︎ ou o bot (`preferencia_definir`) | sim |
+| **Preferências** | `bot.json` (as do template) + `preferencias.md` | você nos Ajustes do bot ou o bot (`preferencia_definir`) | sim |
 | **Memória** | `memoria.md`, até 6.000 caracteres | o bot, na hora (`memoria_adicionar/substituir/remover`) | sim |
 | **Sobre você** | `~/ClaudeFlow/usuario.md`, até 3.000, todos os bots | você ou qualquer bot (`usuario_atualizar`) | sim |
 | **Quadro do squad** | `squads/<squad>/quadro.md` | você ou os bots do squad | sim |
@@ -25,7 +25,7 @@ parecidos, tirar o que não vale mais). É isso que mantém a memória útil em 
 Uma sessão do CLI cresce a cada turno. Ela é encerrada e trocada por uma nova quando:
 - passa de **60%** da janela de contexto (ajustável), ou
 - tem mais de **7 dias** e o bot está parado há 1 hora (a agenda confere a cada 30 min), ou
-- você aperta **🗜 Compactar agora** (⚙︎ do bot › Sessão).
+- você aperta **Compactar agora** (Ajustes do bot › Sessão).
 
 O que acontece:
 1. O bot recebe um turno especial: guardar na memória o que vale, atualizar o perfil do usuário se for o caso e

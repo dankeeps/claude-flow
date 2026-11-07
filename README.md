@@ -9,7 +9,7 @@ bot está trabalhando; parado, ele não gasta nada.
 
 ```
  celular (PWA) ─┐                       ┌─ Squad "Principal" ─────────────────────┐
- computador  ───┼─► Claude Flow ───────►│  🎬 Bot Editor   ✨ Bot Roteirista …    │──► Atlas (timeline)
+ computador  ───┼─► Claude Flow ───────►│  Bot Editor   Bot Roteirista   …        │──► Atlas (timeline)
  notificações ◄─┘   (servidor local)    │   conversam entre si; outro squad não   │──► Chrome do Claude Flow
                                          └─────────────────────────────────────────┘──► Gmail, Drive, Meta…
 ```
@@ -19,7 +19,7 @@ bot está trabalhando; parado, ele não gasta nada.
 | | |
 |---|---|
 | **Bots em vez de sessões** | Cada bot tem nome, **avatar**, **função** ("inteligência matriz"), preferências, skills, conectores, modelo e pasta própria. "Sua função é…" / "atualize sua função" no chat → ele grava e vale para sempre. |
-| **Avatar personalizável** | Na criação (e depois, tocando no avatar): uma cabecinha de robô/aparelho montada com **forma** (orbe, tela, chip, capacete, planeta, fone, TV, cápsula, hexa, satélite), **rosto** (8) e **cor** (13), com sorteio. Desenho vetorial próprio (`web/avatar.js`); o bot guarda só `{forma, rosto, cor}`. |
+| **Avatar personalizável** | Na criação (e depois, tocando no avatar): bloco no formato dos ícones da Apple (superelipse) com um **símbolo de linha** (18: faísca, rede, vídeo, corte, escrita, áudio, câmera, anúncio, métricas, alvo, pesquisa, e-mail, agenda, estudo, ideias, código, web, produto), **cor** (as 13 cores do sistema da Apple) e **fundo** (colorido ou escuro). Sem emoji em lugar nenhum do app: os ícones da interface são de linha (`web/icones.js`). |
 | **Squads** | Um squad é um time de bots que conversam entre si (`bot_enviar`, com ou sem esperar a resposta) e dividem um **quadro**. Um squad não enxerga o outro. Trava contra bots conversando em loop. |
 | **Memória que dura** | Ideia do Hermes Agent: memória curta e curada pelo próprio bot (com limite de tamanho) + resumo de cada sessão + **busca no histórico inteiro** (SQLite FTS5). A sessão é **compactada** sozinha a cada 7 dias ou quando passa de 60% da janela; a transcrição bruta vira `.gz` e some depois de 30 dias. Detalhes em [docs/memoria.md](docs/memoria.md). |
 | **Templates** | Na hora de criar um bot você escolhe o template e o nome. Já vem o **Bot Editor** (e o "Em branco"). |
@@ -52,9 +52,9 @@ Depois: `npm start` (ou o atalho) e abra **http://localhost:4400**. Diagnóstico
 
 1. Na primeira vez já existe o squad **Principal** com o **Bot Editor**.
 2. **+ Bot** → escolha o squad, o template e o nome. Em branco: diga a função no chat ("Sua função é…").
-3. Anexe arquivos pelo **＋** do chat (vídeo bruto, roteiro). Eles vão para `~/ClaudeFlow/uploads/`.
-4. ⚙︎ do bot: função, memória, preferências (fonte de B-roll, modelo do Atlas, render…), conectores, skills e sessão.
-5. 💬 do squad: quadro do squad e a conversa entre os bots.
+3. Anexe arquivos pelo **+** do chat (vídeo bruto, roteiro). Eles vão para `~/ClaudeFlow/uploads/`.
+4. **Ajustes do bot** (ícone no canto do chat): função, memória, preferências (fonte de B-roll, modelo do Atlas, render…), conectores, skills e sessão.
+5. **Sala do squad** (ícone de conversa ao lado do nome do squad): quadro do squad e a conversa entre os bots.
 6. **Ajustes → Ativar notificações** em cada aparelho.
 
 ## Onde fica cada coisa

@@ -1,7 +1,6 @@
 {
   "nome": "Em branco",
   "descricao": "Bot sem função definida: na primeira conversa você diz o que ele faz (\"sua função é…\") e ele grava.",
-  "icone": "✨",
   "ordem": 90,
   "modelo": "",
   "autonomia": "total",

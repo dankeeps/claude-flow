@@ -293,10 +293,10 @@ async function depoisDoTurno(bot, item, { final, dur, erroCli, parado }) {
 
   const veioDeFora = item.origem?.tipo !== 'usuario';
   if (erroCli) {
-    await notificar({ titulo: `⚠️ ${bot.nome} parou com erro`, texto: erroCli, bot: bot.id });
+    await notificar({ titulo: `${bot.nome} parou com erro`, texto: erroCli, bot: bot.id });
   } else if (veioDeFora || dur > config.push.terminouAposSeg * 1000 || !alguemVendo(bot.id)) {
     const resumo = final.replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 180);
-    await notificar({ titulo: `✅ ${bot.nome} terminou`, texto: resumo || 'Turno concluído.', bot: bot.id });
+    await notificar({ titulo: `${bot.nome} terminou`, texto: resumo || 'Turno concluído.', bot: bot.id });
   }
 
   const motivo = mem.precisaCompactar(bot);

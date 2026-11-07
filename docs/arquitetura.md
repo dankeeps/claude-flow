@@ -40,7 +40,7 @@ Sem build e sem framework: Node 22.13+ (usa o SQLite embutido do Node), três de
 5. Fim do turno: notificação "terminou" (se demorou mais de 20 s, veio de outro bot ou ninguém está olhando aquele
    bot), resposta para quem estava esperando (`bot_enviar` com `aguardar`) e, se passou do limite, **compactação**.
 
-Bot parado não tem processo nenhum. O botão ■ mata o processo e os filhos dele (scripts Python que o bot abriu).
+Bot parado não tem processo nenhum. O botão de parar mata o processo e os filhos dele (scripts Python que o bot abriu).
 
 ## Arquivos de cada bot
 

@@ -19,7 +19,7 @@ Proteções:
 - **Ciclo**: A esperando B e B tentando esperar A é recusado (B é orientado a mandar sem esperar).
 - **Loop**: no máximo 8 mensagens seguidas entre bots sem você falar (`squad.maxCadeia`); passou disso, para e manda
   notificação.
-- Tudo que um bot recebe de outro aparece no chat dele (com "↘ de @Fulano") e na **sala do squad** (💬).
+- Tudo que um bot recebe de outro aparece no chat dele (com "@Fulano" em azul) e na **sala do squad**.
 
 Exemplo: no squad Kellen, você pede ao Bot Roteirista "escreve o K40 e manda para o @Bot Editor editar quando eu
 gravar". O roteirista escreve, grava no quadro e, quando você manda o bruto ao editor, ele já sabe de onde veio o
@@ -31,7 +31,7 @@ Pasta `templates/<id>/`:
 
 | arquivo | para quê |
 |---|---|
-| `template.json` | nome, ícone, descrição, modelo, autonomia, conectores ligados, navegador, pastas extras, variáveis de ambiente e as **preferências** (campos que aparecem no ⚙︎ do bot) |
+| `template.json` | nome, descrição, avatar, modelo, autonomia, conectores ligados, navegador, pastas extras, variáveis de ambiente e as **preferências** (campos que aparecem no Ajustes do bot) |
 | `funcao.md` | função inicial (`{{nome}}` vira o nome do bot) |
 | `instrucoes.md` | instruções técnicas que entram em toda sessão |
 | `memoria.md` | fatos de partida |

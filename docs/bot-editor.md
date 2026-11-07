@@ -22,7 +22,7 @@ Template `templates/editor/`. Edita anúncio e VSL vertical e entrega **na timel
 6. **Ajustes e render** — pelo chat ("troca o B-roll 3", "renderiza"). O vídeo renderizado chega no app como arquivo
    (abre e baixa no celular).
 
-## Preferências (⚙︎ do bot › Preferências)
+## Preferências (Ajustes do bot › Preferências)
 
 Fonte de B-roll · Modelo de edição no Atlas · Corte do bruto · B-rolls por minuto · Efeitos sonoros · Legenda ·
 Renderizar · Estudo dos B-rolls novos pelo Gemini. Também mudam pelo chat ("a partir de agora usa TikTok").
@@ -42,7 +42,7 @@ Renderizar · Estudo dos B-rolls novos pelo Gemini. Também mudam pelo chat ("a 
 - **Atlas** (`~/Octo Edição/Atlas`, repositório dankeeps/Atlas-interno): timeline, motor, estilos, efeitos sonoros,
   `tiktok.py`, `gemini.py`, biblioteca. `npm run editor:instalar` clona se não existir.
 - **Biblioteca de B-roll** (`~/Octo Edição/B-rolls`) e projetos (`~/Edições`): vídeos grandes demais para o GitHub.
-- **Chaves** da Apify e da OpenRouter: ⚙ Configurações do Atlas (`~/.config/estudio-edicao/chaves.json`).
+- **Chaves** da Apify e da OpenRouter: Configurações do Atlas (`~/.config/estudio-edicao/chaves.json`).
 
 ## Instalar
 

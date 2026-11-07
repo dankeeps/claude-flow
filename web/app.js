@@ -1,5 +1,6 @@
-// Claude Flow — app (PWA). Sem build: JavaScript puro (os avatares ficam em avatar.js).
-import { avatarSVG, avatarPadrao, avatarAleatorio, FORMAS, ROSTOS, CORES } from './avatar.js';
+// Claude Flow — app (PWA). Sem build: JavaScript puro (avatares em avatar.js, ícones de linha em icones.js).
+import { avatarSVG, avatarPadrao, avatarAleatorio, avatarValido, GLIFOS, CORES, FUNDOS } from './avatar.js';
+import { icone } from './icones.js';
 
 const S = {
   estado: null,
@@ -116,10 +117,11 @@ const ir = (hash) => { location.hash = hash; };
 window.addEventListener('hashchange', () => { lerRota(); renderTudo(); presenca(); });
 
 // ---------- lateral ----------
-const avatarDe = (b) => b?.avatar || avatarPadrao(b?.id || 'bot');
-function iconeBot(b, tamanho = 32, animar = false) {
-  return h('span', { class: 'avatar', html: avatarSVG(avatarDe(b), { tamanho, animar }) });
+const avatarDe = (b) => (avatarValido(b?.avatar) ? b.avatar : avatarPadrao(b?.id || 'bot'));
+function iconeBot(b, tamanho = 32) {
+  return h('span', { class: 'avatar', html: avatarSVG(avatarDe(b), { tamanho }) });
 }
+const ic = (nome, tamanho = 18, opcoes) => h('span', { class: 'ic', html: icone(nome, tamanho, opcoes) });
 function classeStatus(b) { return (b.status || 'ocioso').replace(' ', '-'); }
 function subtituloBot(b) {
   if (b.status === 'trabalhando') return 'trabalhando…';
@@ -137,9 +139,9 @@ function renderLateral() {
     const fechado = S.fechados.has(sq.id);
     return h('div', { class: `squad${fechado ? ' fechado' : ''}` },
       h('div', { class: 'squad-topo', onclick: () => { fechado ? S.fechados.delete(sq.id) : S.fechados.add(sq.id); localSet('squadsFechados', JSON.stringify([...S.fechados])); renderLateral(); } },
-        h('span', { class: 'seta' }, '▾'), h('span', { class: 'nome' }, sq.nome),
-        h('button', { class: 'btn-txt', title: 'Sala do squad', style: { fontSize: '13px' }, onclick: (e) => { e.stopPropagation(); ir(`#/squad/${sq.id}`); } }, '💬'),
-        h('button', { class: 'btn-txt', title: 'Novo bot neste squad', style: { fontSize: '15px' }, onclick: (e) => { e.stopPropagation(); modalNovoBot(sq.id); } }, '+')),
+        h('span', { class: 'seta' }, ic('baixo', 13)), h('span', { class: 'nome' }, sq.nome),
+        h('button', { class: 'btn-txt', title: 'Sala do squad', onclick: (e) => { e.stopPropagation(); ir(`#/squad/${sq.id}`); } }, ic('conversa', 15)),
+        h('button', { class: 'btn-txt', title: 'Novo bot neste squad', onclick: (e) => { e.stopPropagation(); modalNovoBot(sq.id); } }, ic('mais', 15))),
       h('div', { class: 'bots' }, bs.length ? bs.map((b) => {
         const n = S.naoLidas.get(b.id) || 0;
         return h('a', { class: `item${S.rota.tela === 'bot' && S.rota.id === b.id ? ' ativo' : ''}`, href: `#/bot/${b.id}` },
@@ -157,17 +159,17 @@ function renderLateral() {
         h('button', { class: 'btn min', onclick: modalNovoSquad }, '+ Squad'))),
     h('div', { class: 'lista' }, squads),
     h('div', { class: 'barra' },
-      aprov ? h('a', { class: 'item', href: '#/aprovacoes' }, h('span', { class: 'ic' }, '🔐'), h('span', { class: 'txt' }, 'Permissões pendentes'), h('span', { class: 'contador' }, aprov)) : null,
-      h('a', { class: `item${S.rota.tela === 'conectores' ? ' ativo' : ''}`, href: '#/conectores' }, h('span', { class: 'ic' }, '🔌'), 'Conectores'),
-      h('a', { class: `item${S.rota.tela === 'navegador' ? ' ativo' : ''}`, href: '#/navegador' }, h('span', { class: 'ic' }, '🌐'), 'Navegador'),
-      h('a', { class: `item${S.rota.tela === 'ajustes' ? ' ativo' : ''}`, href: '#/ajustes' }, h('span', { class: 'ic' }, '⚙️'), 'Ajustes'),
+      aprov ? h('a', { class: 'item', href: '#/aprovacoes' }, ic('cadeado'), h('span', { class: 'txt' }, 'Permissões pendentes'), h('span', { class: 'contador' }, aprov)) : null,
+      h('a', { class: `item${S.rota.tela === 'conectores' ? ' ativo' : ''}`, href: '#/conectores' }, ic('conector'), 'Conectores'),
+      h('a', { class: `item${S.rota.tela === 'navegador' ? ' ativo' : ''}`, href: '#/navegador' }, ic('globo'), 'Navegador'),
+      h('a', { class: `item${S.rota.tela === 'ajustes' ? ' ativo' : ''}`, href: '#/ajustes' }, ic('engrenagem'), 'Ajustes'),
       lim ? h('div', { class: 'limite' }, `Limite da assinatura (${lim.rateLimitType === 'five_hour' ? '5 h' : lim.rateLimitType || ''}): ${lim.status === 'allowed' ? 'ok' : lim.status}${lim.resetsAt ? ` · renova ${new Date(lim.resetsAt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}`) : null));
 }
 
 // ---------- tela de bot (chat) ----------
 function topo(titulo, sub, ...dir) {
   return h('div', { class: 'topo' },
-    h('button', { class: 'btn-txt voltar', onclick: () => ir('#/'), title: 'Voltar' }, '‹'),
+    h('button', { class: 'btn-txt voltar', onclick: () => ir('#/'), title: 'Voltar' }, ic('voltar', 22)),
     h('div', { class: 'titulo' }, h('b', {}, titulo), sub ? h('small', {}, sub) : null), ...dir);
 }
 
@@ -193,8 +195,8 @@ function renderBot(b) {
   const p = $('#principal');
   const sq = squad(b.squad);
   const cab = topo(b.nome, subTopoBot(b),
-    h('button', { class: 'btn so-grande', onclick: () => ir(`#/squad/${b.squad}`) }, `💬 ${sq?.nome || 'Squad'}`),
-    h('button', { class: 'btn ic', title: 'Função, memória, conectores, skills', onclick: () => abrirPainel(b.id) }, '⚙︎'));
+    h('button', { class: 'btn so-grande', onclick: () => ir(`#/squad/${b.squad}`) }, ic('squad', 15), sq?.nome || 'Squad'),
+    h('button', { class: 'btn ic', title: 'Função, memória, conectores, skills', onclick: () => abrirPainel(b.id) }, ic('ajustes', 18)));
   cab.insertBefore(h('button', { class: 'avatar-topo', title: 'Mudar a aparência', onclick: () => modalAparencia(b.id) }, iconeBot(b, 36)), cab.querySelector('.titulo'));
   p.replaceChildren(
     cab,
@@ -226,7 +228,7 @@ function blocoArquivo(meta) {
     : ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext) ? h('img', { src: url, alt: meta.nome, loading: 'lazy' }) : null;
   return h('div', { class: 'arquivo' }, midia,
     meta.legenda ? h('div', { class: 'dica' }, meta.legenda) : null,
-    h('div', { class: 'linha' }, h('span', {}, `📎 ${meta.nome}`), h('small', { class: 'dica' }, mb(meta.tamanho || 0)),
+    h('div', { class: 'linha' }, ic('documento', 16), h('span', {}, meta.nome), h('small', { class: 'dica' }, mb(meta.tamanho || 0)),
       h('a', { class: 'btn min', href: url, target: '_blank' }, 'Abrir'), h('a', { class: 'btn min', href: `${url}?baixar=1` }, 'Baixar')));
 }
 
@@ -243,7 +245,7 @@ function renderMsgs(rolar = false) {
     if (!grupo) return;
     const itens = grupo.map((m) => h('div', { class: `ferr${m.erro ? ' erro' : ''}` }, h('b', {}, (m.meta?.nome || '').replace(/^mcp__/, '').replace(/__/g, ' › ')), ' ', m.meta?.resumo || ''));
     nos.push(itens.length > 3
-      ? h('details', { class: 'ferramentas' }, h('summary', {}, `🔧 ${itens.length} ações · última: `, itens.at(-1).cloneNode(true).textContent), itens)
+      ? h('details', { class: 'ferramentas' }, h('summary', {}, ic('terminal', 13), ` ${itens.length} ações · última: `, itens.at(-1).cloneNode(true).textContent), itens)
       : h('div', { class: 'ferramentas' }, itens));
     grupo = null;
   };
@@ -251,11 +253,11 @@ function renderMsgs(rolar = false) {
     if (m.papel === 'ferramenta') { (grupo ||= []).push(m); continue; }
     fecharGrupo();
     if (m.papel === 'usuario') {
-      nos.push(h('div', { class: 'msg usuario' }, m.texto, m.meta?.anexos?.length ? h('div', { class: 'anexos' }, m.meta.anexos.map((a) => h('span', { class: 'anexo' }, '📎 ', h('span', {}, a.nome)))) : null));
+      nos.push(h('div', { class: 'msg usuario' }, m.texto, m.meta?.anexos?.length ? h('div', { class: 'anexos' }, m.meta.anexos.map((a) => h('span', { class: 'anexo' }, ic('anexo', 13), h('span', {}, a.nome)))) : null));
     } else if (m.papel === 'bot') {
       nos.push(h('div', { class: 'msg bot md', html: md(m.texto) }));
     } else if (m.papel === 'entrada') {
-      nos.push(h('div', { class: 'msg entrada' }, h('div', { class: 'de' }, `↘ de @${m.meta?.deNome || bot(m.de)?.nome || m.de}${m.meta?.aguardar ? ' (esperando resposta)' : ''}`), h('div', { class: 'md', html: md(m.texto) })));
+      nos.push(h('div', { class: 'msg entrada' }, h('div', { class: 'de' }, ic('entrada', 13), `@${m.meta?.deNome || bot(m.de)?.nome || m.de}${m.meta?.aguardar ? ' (esperando resposta)' : ''}`), h('div', { class: 'md', html: md(m.texto) })));
     } else if (m.papel === 'arquivo') {
       nos.push(blocoArquivo(m.meta || {}));
     } else {
@@ -269,7 +271,7 @@ function renderMsgs(rolar = false) {
   else if (b.status === 'trabalhando') nos.push(h('div', { class: 'trabalhando-linha' }, h('i', { class: 'ponto trabalhando' }), 'trabalhando…'));
   if (!lista.length && !delta) {
     const t = template(b.template);
-    nos.push(h('div', { class: 'vazio' }, iconeBot(b, 104, true), h('p', {}, `Converse com ${b.nome}.`),
+    nos.push(h('div', { class: 'vazio' }, iconeBot(b, 88), h('p', {}, `Converse com ${b.nome}.`),
       h('p', { class: 'dica' }, t?.id === 'em-branco' ? 'Comece dizendo a função dele: "Sua função é…". Ele grava e lembra em todas as sessões.' : t?.descricao || '')));
   }
   cont.replaceChildren(...nos);
@@ -278,7 +280,7 @@ function renderMsgs(rolar = false) {
 
 function cartaoAprovacao(ap) {
   return h('div', { class: 'aprovacao' },
-    h('b', {}, `🔐 ${ap.botNome} quer usar ${ap.ferramenta}`), h('code', {}, ap.resumo),
+    h('b', { class: 'com-ic' }, ic('cadeado', 16), `${ap.botNome} quer usar ${ap.ferramenta}`), h('code', {}, ap.resumo),
     h('div', { class: 'acoes-lin' },
       h('button', { class: 'btn prim', onclick: tenta(() => api('POST', `/api/aprovacoes/${ap.id}`, { permitir: true })) }, 'Permitir'),
       h('button', { class: 'btn', onclick: tenta(() => api('POST', `/api/aprovacoes/${ap.id}`, { permitir: false })) }, 'Negar')));
@@ -299,7 +301,7 @@ function compositor(b) {
     const bb = bot(b.id);
     const pararModo = bb?.status === 'trabalhando' && !ta.value.trim() && !S.anexos.length;
     botao.className = `enviar${pararModo ? ' parar' : ''}`;
-    botao.textContent = pararModo ? '' : '↑';
+    botao.innerHTML = icone(pararModo ? 'parar' : 'enviar', 18, { preenchido: pararModo });
     botao.title = pararModo ? 'Parar' : 'Enviar';
   };
   ta.addEventListener('input', atualizarBotao);
@@ -307,9 +309,9 @@ function compositor(b) {
   S.atualizarBotao = atualizarBotao;
 
   function renderAnexos() {
-    anexos.replaceChildren(...S.anexos.map((a, i) => h('span', { class: 'anexo' }, '📎 ', h('span', {}, a.nome),
+    anexos.replaceChildren(...S.anexos.map((a, i) => h('span', { class: 'anexo' }, ic('anexo', 13), h('span', {}, a.nome),
       a.token ? null : h('span', { class: 'prog' }, h('i', { style: { width: `${a.pct || 0}%` } })),
-      h('button', { class: 'btn-txt', style: { fontSize: '13px', padding: '0 2px' }, onclick: () => { S.anexos.splice(i, 1); renderAnexos(); atualizarBotao(); } }, '✕'))));
+      h('button', { class: 'btn-txt', style: { fontSize: '13px', padding: '0 2px' }, onclick: () => { S.anexos.splice(i, 1); renderAnexos(); atualizarBotao(); } }, ic('fechar', 13)))));
   }
   S.renderAnexos = renderAnexos;
   renderAnexos();
@@ -344,7 +346,7 @@ function compositor(b) {
     h('div', { class: 'caixa', ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); for (const f of e.dataTransfer.files) subir(f); } },
       anexos, ta,
       h('div', { class: 'linha' },
-        h('button', { class: 'btn-txt', title: 'Anexar arquivo (vídeo, roteiro…)', onclick: () => arquivo.click() }, '＋'), arquivo,
+        h('button', { class: 'btn-txt', title: 'Anexar arquivo (vídeo, roteiro…)', onclick: () => arquivo.click() }, ic('mais', 20)), arquivo,
         h('span', { class: 'esp', id: 'fila-info' }, b.fila ? `${b.fila} na fila` : ''),
         botao))));
 }
@@ -364,7 +366,7 @@ async function abrirPainel(botId, aba) {
     abasEl.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x.dataset.aba === S.painelAba));
   };
   const abasEl = h('div', { class: 'abas' }, abas.map(([k, n]) => h('button', { 'data-aba': k, onclick: () => { S.painelAba = k; desenhar(); } }, n)));
-  p.replaceChildren(h('div', { class: 'cab' }, h('button', { class: 'avatar-topo', title: 'Mudar a aparência', onclick: () => modalAparencia(b.id) }, iconeBot(b, 30)), h('b', {}, b.nome), h('button', { class: 'btn-txt', onclick: fecharPainel }, '✕')), abasEl, corpo);
+  p.replaceChildren(h('div', { class: 'cab' }, h('button', { class: 'avatar-topo', title: 'Mudar a aparência', onclick: () => modalAparencia(b.id) }, iconeBot(b, 30)), h('b', {}, b.nome), h('button', { class: 'btn-txt', title: 'Fechar', onclick: fecharPainel }, ic('fechar', 18))), abasEl, corpo);
   desenhar();
 }
 const fecharPainel = () => { $('#painel').hidden = true; };
@@ -468,7 +470,7 @@ function painelConteudo(b, d, aba) {
       linhaInfo('Custo estimado (equivalente API)', `US$ ${(b.custoEstimado || 0).toFixed(2)} — na assinatura entra no limite, não é cobrado à parte`),
       linhaInfo('Pasta do bot', d.pasta)),
     h('div', { class: 'acoes-lin', style: { marginTop: '14px' } },
-      h('button', { class: 'btn', onclick: tenta(async () => { await api('POST', `/api/bots/${b.id}/compactar`); aviso('Compactação na fila', 'O bot guarda a memória e o resumo, e a próxima mensagem abre uma sessão nova.'); }) }, '🗜 Compactar agora'),
+      h('button', { class: 'btn', onclick: tenta(async () => { await api('POST', `/api/bots/${b.id}/compactar`); aviso('Compactação na fila', 'O bot guarda a memória e o resumo, e a próxima mensagem abre uma sessão nova.'); }) }, ic('compactar', 15), 'Compactar agora'),
       h('button', { class: 'btn', onclick: tenta(async () => { if (!confirm('Abrir uma sessão nova sem compactar? A função e a memória continuam; o que não foi guardado na memória fica só no histórico.')) return; await api('POST', `/api/bots/${b.id}/nova-sessao`); aviso('Sessão nova'); }) }, 'Sessão nova'),
       h('button', { class: 'btn', onclick: tenta(async () => { await api('POST', `/api/bots/${b.id}/parar`, { limparFila: true }); aviso('Parado', 'Fila limpa.'); }) }, 'Parar e limpar fila')),
     h('h2', { class: 'sec' }, 'Bot'),
@@ -486,7 +488,7 @@ async function renderSquad(sq) {
   const corpo = h('div', { class: 'estreito' }, h('div', { class: 'vazio' }, 'Carregando…'));
   p.replaceChildren(topo(`Squad ${sq.nome}`, `${bs.length} bot(s) · conversam entre si, nunca com outro squad`,
     h('button', { class: 'btn', onclick: () => modalNovoBot(sq.id) }, '+ Bot'),
-    h('button', { class: 'btn ic', title: 'Renomear / apagar', onclick: () => modalSquad(sq) }, '⚙︎')),
+    h('button', { class: 'btn ic', title: 'Renomear / apagar', onclick: () => modalSquad(sq) }, ic('ajustes', 18))),
   h('div', { class: 'conteudo' }, corpo));
   const sala = await api('GET', `/api/squads/${sq.id}/sala`).catch(() => ({ mensagens: [], quadro: '' }));
   const quadro = h('textarea', { class: 'ent', rows: 6 }, sala.quadro || '');
@@ -508,7 +510,7 @@ function renderConectores() {
   const grupos = {};
   for (const c of S.estado.conectores) (grupos[c.grupo || 'Outros'] ||= []).push(c);
   const a = S.estado.atlas;
-  p.replaceChildren(topo('Conectores', 'O que os bots conseguem acessar. Cada bot liga só os que usa (⚙︎ do bot › Conectores).'),
+  p.replaceChildren(topo('Conectores', 'O que os bots conseguem acessar. Cada bot liga só os que usa (Ajustes do bot › Conectores).'),
     h('div', { class: 'conteudo' }, h('div', { class: 'estreito' },
       Object.entries(grupos).map(([g, cs]) => [h('h2', { class: 'sec' }, g), h('div', { class: 'grade' }, cs.map((c) => cartaoConector(c, a)))]),
       h('p', { class: 'dica', style: { marginTop: '24px' } }, 'Os conectores da conta claude.ai (Google, Notion, Meta, Higgsfield) aparecem sozinhos no Claude CLI de quem está logado nessa conta. Para conectar um novo, entre em claude.ai › Configurações › Conectores. Mais detalhes em docs/conectores.md.'))));
@@ -549,11 +551,11 @@ async function renderNavegador() {
     st.chrome ? h('p', { class: 'dica' }, `Navegador encontrado: ${st.chrome}`) : h('p', { class: 'dica', style: { color: 'var(--fila)' } }, 'Nenhum Chrome/Edge encontrado neste computador. Instale o Google Chrome.'),
     h('label', { class: 'campo' }, 'Abrir já numa página', url),
     h('div', { class: 'cartao' }, st.perfis.map((pf) => h('div', { class: 'chave' },
-      h('div', { class: 'txt' }, h('b', {}, pf.perfil === 'principal' ? 'Principal (compartilhado)' : bot(pf.perfil)?.nome ? `Próprio de ${bot(pf.perfil).nome}` : pf.perfil), h('small', {}, `${pf.ativo ? '● aberto' : 'fechado'} · porta ${pf.porta}`)),
+      h('div', { class: 'txt' }, h('b', {}, pf.perfil === 'principal' ? 'Principal (compartilhado)' : bot(pf.perfil)?.nome ? `Próprio de ${bot(pf.perfil).nome}` : pf.perfil), h('small', {}, `${pf.ativo ? 'aberto' : 'fechado'} · porta ${pf.porta}`)),
       h('div', { class: 'acoes-lin' },
         h('button', { class: 'btn min', onclick: tenta(async () => { await api('POST', `/api/navegador/${pf.perfil}/abrir`, { url: url.value.trim() }); renderNavegador(); }) }, pf.ativo ? 'Abrir aba' : 'Abrir'),
         pf.ativo ? h('button', { class: 'btn min', onclick: tenta(async () => { await api('POST', `/api/navegador/${pf.perfil}/fechar`); renderNavegador(); }) }, 'Fechar') : null)))),
-    h('p', { class: 'dica', style: { marginTop: '16px' } }, 'Dois bots usando o perfil Principal ao mesmo tempo disputam as abas. Para trabalho em paralelo, dê ao bot um navegador próprio (⚙︎ do bot › Preferências › Navegador).'));
+    h('p', { class: 'dica', style: { marginTop: '16px' } }, 'Dois bots usando o perfil Principal ao mesmo tempo disputam as abas. Para trabalho em paralelo, dê ao bot um navegador próprio (Ajustes do bot › Preferências › Navegador).'));
 }
 
 // ---------- aprovações ----------
@@ -627,44 +629,44 @@ function modal(...conteudo) {
 }
 const fecharModal = () => { $('#modal').hidden = true; };
 
-// Editor de avatar: prévia grande (pisca e flutua) + forma, rosto e cor. As opções de forma e rosto são desenhadas
-// já com a cor e o resto escolhido, para a pessoa ver como fica antes de tocar.
+// Editor de avatar: prévia grande + símbolo, cor e fundo. Os símbolos aparecem em linha simples (como numa
+// biblioteca de ícones); a cor e o fundo valem para a prévia.
 function editorAvatar(av, aoMudar) {
   const prev = h('div', { class: 'av-prev' });
-  const formas = h('div', { class: 'av-grade' });
-  const rostos = h('div', { class: 'av-grade' });
+  const glifos = h('div', { class: 'av-grade' });
   const cores = h('div', { class: 'av-cores' });
+  const fundos = h('div', { class: 'segmento' });
   const escolher = (campo, valor) => { av[campo] = valor; desenhar(); aoMudar?.(); };
-  const opcao = (campo, item, variante) => h('button', {
-    class: `av-op${av[campo] === item.id ? ' sel' : ''}`, title: item.nome, 'aria-label': item.nome,
-    onclick: () => escolher(campo, item.id), html: avatarSVG(variante, { tamanho: 42 }),
-  });
   function desenhar() {
-    prev.innerHTML = avatarSVG(av, { tamanho: 136, animar: true });
-    formas.replaceChildren(...FORMAS.map((f) => opcao('forma', f, { ...av, forma: f.id })));
-    rostos.replaceChildren(...ROSTOS.map((r) => opcao('rosto', r, { ...av, rosto: r.id })));
+    prev.innerHTML = avatarSVG(av, { tamanho: 112 });
+    glifos.replaceChildren(...GLIFOS.map((g) => h('button', {
+      class: `av-op${av.glifo === g.id ? ' sel' : ''}`, title: g.nome, 'aria-label': g.nome, onclick: () => escolher('glifo', g.id),
+      html: `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="${g.d}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    })));
     cores.replaceChildren(...CORES.map((c) => h('button', {
       class: `av-cor${av.cor === c.id ? ' sel' : ''}`, title: c.nome, 'aria-label': c.nome, style: { background: c.hex }, onclick: () => escolher('cor', c.id),
     })));
+    fundos.replaceChildren(...FUNDOS.map((f) => h('button', { class: (av.fundo || 'cor') === f.id ? 'sel' : '', onclick: () => escolher('fundo', f.id) }, f.nome)));
   }
   desenhar();
-  const dado = h('button', { class: 'av-dado', title: 'Sortear um avatar', 'aria-label': 'Sortear', onclick: () => { Object.assign(av, avatarAleatorio()); desenhar(); aoMudar?.(); } }, '⟳');
+  const dado = h('button', { class: 'av-dado', title: 'Sortear', 'aria-label': 'Sortear', onclick: () => { Object.assign(av, avatarAleatorio()); desenhar(); aoMudar?.(); } }, ic('sortear', 17));
   return {
     desenhar,
     topo: h('div', { class: 'av-topo' }, prev, dado),
-    opcoes: h('div', {}, h('div', { class: 'av-rot' }, 'Forma'), formas, h('div', { class: 'av-rot' }, 'Rosto'), rostos, h('div', { class: 'av-rot' }, 'Cor'), cores),
+    opcoes: h('div', {}, h('div', { class: 'av-rot' }, 'Símbolo'), glifos, h('div', { class: 'av-rot' }, 'Cor'), cores, h('div', { class: 'av-rot' }, 'Fundo'), fundos),
   };
 }
 
 function cabModal(titulo) {
-  return h('div', { class: 'm-cab' }, h('button', { class: 'btn-txt', title: 'Fechar', onclick: fecharModal }, '✕'), h('b', {}, titulo), h('span'));
+  return h('div', { class: 'm-cab' }, h('button', { class: 'btn-txt', title: 'Fechar', onclick: fecharModal }, ic('fechar', 18)), h('b', {}, titulo), h('span'));
 }
 
 function modalNovoBot(squadId) {
   const tpls = S.estado.templates;
   let tpl = tpls[0]?.id;
   let mexeu = false; // depois que a pessoa mexe no avatar, trocar de template não muda mais o desenho
-  const av = { ...(template(tpl)?.avatar || avatarAleatorio()) };
+  const avTpl = (t) => (avatarValido(t?.avatar) ? { fundo: 'cor', ...t.avatar } : avatarAleatorio());
+  const av = avTpl(template(tpl));
   const ed = editorAvatar(av, () => { mexeu = true; });
   const nome = h('input', { class: 'ent av-nome', placeholder: 'Dê um nome ao seu bot', maxlength: 40, autocomplete: 'off' });
   const criar = h('button', { class: 'btn prim av-criar', disabled: true }, 'Criar bot');
@@ -686,11 +688,11 @@ function modalNovoBot(squadId) {
       onclick: () => {
         const nomeEraDoTemplate = !nome.value.trim() || tpls.some((x) => x.nome === nome.value.trim());
         tpl = t.id;
-        if (!mexeu) { Object.assign(av, t.avatar || avatarAleatorio()); ed.desenhar(); }
+        if (!mexeu) { Object.assign(av, avTpl(t)); ed.desenhar(); }
         if (nomeEraDoTemplate) nome.value = t.id === 'em-branco' ? '' : t.nome;
         atualizarCriar(); desenharTemplates();
       },
-    }, h('span', { class: 'avatar', html: avatarSVG(t.avatar || { forma: 'orbe', rosto: 'pontos', cor: 'gelo' }, { tamanho: 22 }) }), t.nome)));
+    }, h('span', { class: 'avatar', html: avatarSVG(avatarValido(t.avatar) ? t.avatar : { glifo: 'faisca', cor: 'cinza', fundo: 'escuro' }, { tamanho: 22 }) }), t.nome)));
     descricao.textContent = template(tpl)?.descricao || '';
     campoFuncao.hidden = tpl !== 'em-branco';
   };

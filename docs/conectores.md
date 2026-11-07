@@ -1,6 +1,6 @@
 # Conectores
 
-Catálogo em `conectores/catalogo.json`. Cada bot liga só os que usa (⚙︎ do bot › Conectores): cada conector a mais
+Catálogo em `conectores/catalogo.json`. Cada bot liga só os que usa (Ajustes do bot › Conectores): cada conector a mais
 são ferramentas a mais no contexto de todo turno.
 
 ## Pela conta claude.ai (sem configurar nada)

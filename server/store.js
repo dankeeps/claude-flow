@@ -57,7 +57,7 @@ export function novoBotBase({ squad, nome, template }) {
     squad,
     nome: String(nome).trim(),
     template,
-    avatar: null, // { forma, rosto, cor } — desenhado pelo app (web/avatar.js)
+    avatar: null, // { glifo, cor, fundo } — desenhado pelo app (web/avatar.js)
     criado: Date.now(),
     modelo: '',
     esforco: '',
@@ -81,8 +81,8 @@ export function novoBotBase({ squad, nome, template }) {
 export function limparAvatar(av) {
   if (!av || typeof av !== 'object') return null;
   const id = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24);
-  const out = { forma: id(av.forma), rosto: id(av.rosto), cor: id(av.cor) };
-  return out.forma && out.rosto && out.cor ? out : null;
+  const out = { glifo: id(av.glifo), cor: id(av.cor), fundo: av.fundo === 'escuro' ? 'escuro' : 'cor' };
+  return out.glifo && out.cor ? out : null;
 }
 
 export function publicoBot(bot) {

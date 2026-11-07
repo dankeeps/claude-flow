@@ -5,7 +5,7 @@ aberto com a porta de controle (CDP) só em `127.0.0.1`. A janela aparece no com
 
 ## Conectar contas
 
-1. App › 🌐 **Navegador** › **Abrir** (perfil Principal). Abre a janela no computador.
+1. App › **Navegador** › **Abrir** (perfil Principal). Abre a janela no computador.
 2. Entre nas contas que os bots vão usar: TikTok, YouTube, Instagram, Biblioteca de Anúncios, o que for.
 3. Pode fechar. O login fica guardado no perfil; da próxima vez que um bot abrir, já está logado.
 
@@ -19,7 +19,7 @@ aberto com a porta de controle (CDP) só em `127.0.0.1`. A janela aparece no com
 ## Perfis
 
 - **Principal**: compartilhado pelos bots que estão com navegador "Principal".
-- **Próprio**: ⚙︎ do bot › Preferências › Navegador › Próprio. Perfil e porta só daquele bot (contas separadas e
+- **Próprio**: Ajustes do bot › Preferências › Navegador › Próprio. Perfil e porta só daquele bot (contas separadas e
   trabalho em paralelo sem um bot mexer na aba do outro).
 
 ## Configuração

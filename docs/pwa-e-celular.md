@@ -38,10 +38,10 @@ na internet.
 
 ## Quando chega notificação
 
-- ✅ **terminou**: o turno durou mais de 20 s, veio de outro bot/da agenda, ou ninguém está com aquele bot aberto na tela.
-- ⚠️ **parou com erro**.
-- 🔐 **pede permissão** (bot no modo "Perguntar"): toque, veja o pedido e Permitir/Negar.
-- ⏸ **conversa entre bots pausada** (passaram de 8 mensagens seguidas sem você).
+- **terminou**: o turno durou mais de 20 s, veio de outro bot/da agenda, ou ninguém está com aquele bot aberto na tela.
+- **parou com erro**.
+- **pede permissão** (bot no modo "Perguntar"): toque, veja o pedido e Permitir/Negar.
+- **conversa entre bots pausada** (passaram de 8 mensagens seguidas sem você).
 - Avisos que o próprio bot manda no meio de um trabalho longo (`mcp__flow__notificar`).
 
 Se você está olhando o chat daquele bot na tela, a notificação não vem (você já está vendo).

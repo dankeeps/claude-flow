@@ -1,103 +1,79 @@
-// Avatares dos bots do Claude Flow: cabecinhas de robô/aparelho desenhadas em SVG, montadas com três escolhas —
-// forma (a "cabeça"), rosto e cor. Tudo vetorial, sem imagem: o bot.json guarda só { forma, rosto, cor }.
+// Avatares dos bots: bloco arredondado (squircle) com um símbolo de linha, no espírito dos ícones da Apple.
+// Duas variações de fundo: "cor" (bloco colorido, símbolo branco) e "escuro" (bloco grafite, símbolo colorido).
+// O bot.json guarda só { glifo, cor, fundo }.
 
+// Cores do sistema da Apple no modo escuro.
 export const CORES = [
-  { id: 'menta', nome: 'Menta', hex: '#3DDC84' },
-  { id: 'lima', nome: 'Lima', hex: '#B5FF00' },
-  { id: 'sol', nome: 'Sol', hex: '#FFC83D' },
-  { id: 'tangerina', nome: 'Tangerina', hex: '#FF8A2A' },
-  { id: 'coral', nome: 'Coral', hex: '#FF6B5B' },
-  { id: 'rosa', nome: 'Rosa', hex: '#FF5FA2' },
-  { id: 'lavanda', nome: 'Lavanda', hex: '#B38CFF' },
-  { id: 'indigo', nome: 'Índigo', hex: '#6C6CFF' },
-  { id: 'ceu', nome: 'Céu', hex: '#4DA3FF' },
-  { id: 'turquesa', nome: 'Turquesa', hex: '#2EC4C9' },
-  { id: 'areia', nome: 'Areia', hex: '#E8C9A0' },
-  { id: 'gelo', nome: 'Gelo', hex: '#F2F2F3' },
-  { id: 'grafite', nome: 'Grafite', hex: '#5B5B66' },
+  { id: 'azul', nome: 'Azul', hex: '#0A84FF' },
+  { id: 'indigo', nome: 'Índigo', hex: '#5E5CE6' },
+  { id: 'roxo', nome: 'Roxo', hex: '#BF5AF2' },
+  { id: 'rosa', nome: 'Rosa', hex: '#FF375F' },
+  { id: 'vermelho', nome: 'Vermelho', hex: '#FF453A' },
+  { id: 'laranja', nome: 'Laranja', hex: '#FF9F0A' },
+  { id: 'amarelo', nome: 'Amarelo', hex: '#FFD60A' },
+  { id: 'verde', nome: 'Verde', hex: '#30D158' },
+  { id: 'menta', nome: 'Menta', hex: '#66D4CF' },
+  { id: 'ciano', nome: 'Ciano', hex: '#64D2FF' },
+  { id: 'marrom', nome: 'Marrom', hex: '#AC8E68' },
+  { id: 'cinza', nome: 'Cinza', hex: '#8E8E93' },
+  { id: 'branco', nome: 'Branco', hex: '#F2F2F7' },
 ];
 
-// Cada forma desenha a cabeça (c = cor, s = sombra, l = luz) e diz onde fica o rosto (centro e escala).
-export const FORMAS = [
-  {
-    id: 'orbe', nome: 'Orbe', rosto: [50, 60, 1],
-    svg: ({ c, s }) => `<path d="M50 24V11" stroke="${s}" stroke-width="4.5" stroke-linecap="round"/><circle cx="50" cy="9" r="5.5" fill="${c}"/><circle cx="50" cy="59" r="33" fill="${c}"/>`,
-  },
-  {
-    id: 'tela', nome: 'Tela', rosto: [50, 44, 1],
-    svg: ({ c, s }) => `<rect x="43" y="68" width="14" height="14" fill="${s}"/><rect x="29" y="80" width="42" height="8" rx="4" fill="${c}"/><rect x="12" y="14" width="76" height="58" rx="15" fill="${c}"/>`,
-  },
-  {
-    id: 'chip', nome: 'Chip', rosto: [50, 50, 1],
-    svg: ({ c, s }) => [30, 46, 62].map((y) => `<rect x="8" y="${y}" width="14" height="8" rx="3" fill="${s}"/><rect x="78" y="${y}" width="14" height="8" rx="3" fill="${s}"/>`).join('')
-      + [36, 58].map((x) => `<rect x="${x}" y="8" width="6" height="14" rx="3" fill="${s}"/>`).join('')
-      + `<rect x="18" y="18" width="64" height="66" rx="14" fill="${c}"/>`,
-  },
-  {
-    id: 'capacete', nome: 'Capacete', rosto: [50, 60, 1],
-    svg: ({ c, s }) => `<path d="M36 22q14-14 28 0" fill="none" stroke="${s}" stroke-width="5" stroke-linecap="round"/><rect x="7" y="48" width="16" height="26" rx="7" fill="${s}"/><rect x="77" y="48" width="16" height="26" rx="7" fill="${s}"/><path d="M17 74V54a33 33 0 0 1 66 0v20q0 14-14 14H31q-14 0-14-14z" fill="${c}"/>`,
-  },
-  {
-    id: 'planeta', nome: 'Planeta', rosto: [50, 51, 0.88],
-    svg: ({ c, s, l }) => `<g transform="rotate(-16 50 56)"><ellipse cx="50" cy="56" rx="46" ry="12" fill="none" stroke="${s}" stroke-width="5"/></g><circle cx="50" cy="54" r="30" fill="${c}"/><g transform="rotate(-16 50 56)"><path d="M4 56a46 12 0 0 0 92 0" fill="none" stroke="${l}" stroke-width="5" stroke-linecap="round"/></g>`,
-  },
-  {
-    id: 'fone', nome: 'Fone', rosto: [50, 60, 0.95],
-    svg: ({ c, s }) => `<circle cx="50" cy="58" r="31" fill="${c}"/><path d="M17 56a33 33 0 0 1 66 0" fill="none" stroke="${s}" stroke-width="7" stroke-linecap="round"/><rect x="8" y="48" width="15" height="26" rx="7.5" fill="${s}"/><rect x="77" y="48" width="15" height="26" rx="7.5" fill="${s}"/>`,
-  },
-  {
-    id: 'tv', nome: 'TV', rosto: [46, 58, 0.95],
-    svg: ({ c, s }) => `<path d="M50 30L33 9M50 30L67 9" stroke="${s}" stroke-width="4.5" stroke-linecap="round"/><circle cx="33" cy="9" r="4.5" fill="${c}"/><circle cx="67" cy="9" r="4.5" fill="${c}"/><rect x="10" y="28" width="80" height="60" rx="17" fill="${c}"/><circle cx="79" cy="70" r="4" fill="${s}"/><circle cx="79" cy="56" r="4" fill="${s}"/>`,
-  },
-  {
-    id: 'capsula', nome: 'Cápsula', rosto: [50, 40, 0.92],
-    svg: ({ c, s }) => `<rect x="25" y="7" width="50" height="86" rx="25" fill="${c}"/><rect x="25" y="61" width="50" height="7" fill="${s}"/>`,
-  },
-  {
-    id: 'hexa', nome: 'Hexa', rosto: [50, 52, 1],
-    svg: ({ c, s }) => `<circle cx="11" cy="52" r="5" fill="${s}"/><circle cx="89" cy="52" r="5" fill="${s}"/><path d="M50 12L83 31V71L50 90L17 71V31Z" fill="${c}" stroke="${c}" stroke-width="10" stroke-linejoin="round"/>`,
-  },
-  {
-    id: 'satelite', nome: 'Satélite', rosto: [50, 54, 0.85],
-    svg: ({ c, s }) => `<path d="M22 54H30M70 54H78" stroke="${s}" stroke-width="4"/><rect x="3" y="43" width="20" height="22" rx="3" fill="${s}"/><rect x="77" y="43" width="20" height="22" rx="3" fill="${s}"/><path d="M13 43V65M87 43V65" stroke="${c}" stroke-width="2" opacity=".55"/><path d="M50 26V14" stroke="${s}" stroke-width="4" stroke-linecap="round"/><path d="M41 14a9 9 0 0 1 18 0z" fill="${c}"/><circle cx="50" cy="54" r="27" fill="${c}"/>`,
-  },
+export const FUNDOS = [
+  { id: 'cor', nome: 'Cor' },
+  { id: 'escuro', nome: 'Escuro' },
 ];
 
-// Rostos desenhados em volta de (0,0); f = cor do rosto, c = cor da cabeça (para o brilho dos olhos).
-export const ROSTOS = [
-  { id: 'pontos', nome: 'Pontos', svg: ({ f, c }) => `<circle cx="-11" cy="0" r="6" fill="${f}"/><circle cx="11" cy="0" r="6" fill="${f}"/><circle cx="-9" cy="-2.2" r="1.7" fill="${c}"/><circle cx="13" cy="-2.2" r="1.7" fill="${c}"/>` },
-  { id: 'visor', nome: 'Visor', svg: ({ f, c }) => `<rect x="-23" y="-9" width="46" height="18" rx="9" fill="${f}"/><rect x="-15" y="-3.5" width="9" height="7" rx="3.5" fill="${c}"/><rect x="6" y="-3.5" width="9" height="7" rx="3.5" fill="${c}"/>` },
-  { id: 'ciclope', nome: 'Ciclope', svg: ({ f, c }) => `<circle r="12" fill="${f}"/><circle cx="2.5" cy="-2.5" r="4.5" fill="${c}"/>` },
-  { id: 'feliz', nome: 'Feliz', svg: ({ f }) => `<path d="M-16 3q5-9 10 0M6 3q5-9 10 0" fill="none" stroke="${f}" stroke-width="4.5" stroke-linecap="round"/><path d="M-6 11q6 5 12 0" fill="none" stroke="${f}" stroke-width="3.5" stroke-linecap="round"/>` },
-  { id: 'pixel', nome: 'Pixel', svg: ({ f }) => `<rect x="-17" y="-6" width="10" height="10" fill="${f}"/><rect x="7" y="-6" width="10" height="10" fill="${f}"/><rect x="-7" y="10" width="4" height="4" fill="${f}"/><rect x="-3" y="12" width="6" height="4" fill="${f}"/><rect x="3" y="10" width="4" height="4" fill="${f}"/>` },
-  { id: 'oculos', nome: 'Óculos', svg: ({ f }) => `<circle cx="-11" r="8.5" fill="none" stroke="${f}" stroke-width="3.5"/><circle cx="11" r="8.5" fill="none" stroke="${f}" stroke-width="3.5"/><path d="M-2.5 0h5" stroke="${f}" stroke-width="3"/><circle cx="-10" cy="1" r="3" fill="${f}"/><circle cx="12" cy="1" r="3" fill="${f}"/>` },
-  { id: 'sono', nome: 'Sono', svg: ({ f }) => `<path d="M-17 2h11M6 2h11" stroke="${f}" stroke-width="4.5" stroke-linecap="round"/><path d="M14-17h6l-6 7h6" fill="none" stroke="${f}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` },
-  { id: 'led', nome: 'LED', svg: ({ f }) => `<circle cx="-13" r="4.5" fill="${f}"/><circle r="4.5" fill="${f}" opacity=".55"/><circle cx="13" r="4.5" fill="${f}"/>` },
+// Símbolos de linha numa grade de 24×24 (traço arredondado, sem preenchimento).
+export const GLIFOS = [
+  { id: 'faisca', nome: 'Faísca', d: 'M12 3.5c.6 4.4 2.6 6.4 7 7-4.4.6-6.4 2.6-7 7-.6-4.4-2.6-6.4-7-7 4.4-.6 6.4-2.6 7-7z' },
+  { id: 'nos', nome: 'Rede', d: 'M12 4.2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM5.5 15.8a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM18.5 15.8a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM10.9 8l-4.3 7.9M13.1 8l4.3 7.9M7.5 17.8h9' },
+  { id: 'filme', nome: 'Vídeo', d: 'M6 5h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3zM10.2 9.2v5.6l4.6-2.8z' },
+  { id: 'tesoura', nome: 'Corte', d: 'M6.5 4.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM6.5 14.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM8.6 8.4 20 17.5M8.6 15.6 20 6.5' },
+  { id: 'caneta', nome: 'Escrita', d: 'M4.5 19.5l1-4.2L15.6 5.2a2.1 2.1 0 0 1 3 3L8.5 18.4zM13.8 7l3 3' },
+  { id: 'onda', nome: 'Áudio', d: 'M4 10.5v3M8 7v10M12 4v16M16 8v8M20 10.5v3' },
+  { id: 'camera', nome: 'Câmera', d: 'M5.5 7.5h2l1.6-2.3h5.8l1.6 2.3h2a2.5 2.5 0 0 1 2.5 2.5v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5V10a2.5 2.5 0 0 1 2.5-2.5zM12 10.5a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4z' },
+  { id: 'megafone', nome: 'Anúncio', d: 'M4 10.2v3.6a1.2 1.2 0 0 0 1.2 1.2H7l7 4V5L7 9H5.2A1.2 1.2 0 0 0 4 10.2zM17.5 9a4 4 0 0 1 0 6' },
+  { id: 'grafico', nome: 'Métricas', d: 'M5 19.5v-6M12 19.5v-11M19 19.5v-15' },
+  { id: 'alvo', nome: 'Alvo', d: 'M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17zM12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM12 11.4a.6.6 0 1 1 0 1.2.6.6 0 0 1 0-1.2z' },
+  { id: 'lupa', nome: 'Pesquisa', d: 'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM15.3 15.3 20 20' },
+  { id: 'envelope', nome: 'E-mail', d: 'M5.5 5.5h13A2.5 2.5 0 0 1 21 8v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16V8a2.5 2.5 0 0 1 2.5-2.5zM3.6 7.2 12 13l8.4-5.8' },
+  { id: 'calendario', nome: 'Agenda', d: 'M6.5 5h11A3 3 0 0 1 20.5 8v9.5a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3zM3.5 10h17M8 3v4M16 3v4' },
+  { id: 'livro', nome: 'Estudo', d: 'M12 6.5C10.4 5 7.9 4.5 4 4.8v13.5c3.9-.3 6.4.2 8 1.7 1.6-1.5 4.1-2 8-1.7V4.8c-3.9-.3-6.4.2-8 1.7zM12 6.5V20' },
+  { id: 'lampada', nome: 'Ideias', d: 'M9.5 18h5M10.5 21h3M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.2 1.1 2V16h5v-.2c0-.8.4-1.5 1.1-2A6 6 0 0 0 12 3z' },
+  { id: 'codigo', nome: 'Código', d: 'M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15' },
+  { id: 'globo', nome: 'Web', d: 'M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17zM12 3.5c-2.4 2.3-3.6 5.1-3.6 8.5s1.2 6.2 3.6 8.5c2.4-2.3 3.6-5.1 3.6-8.5S14.4 5.8 12 3.5zM3.5 12h17' },
+  { id: 'cubo', nome: 'Produto', d: 'M12 3.3l7.8 4.4v8.6L12 20.7l-7.8-4.4V7.7zM4.4 7.8 12 12.2l7.6-4.4M12 12.2v8.4' },
 ];
 
 const porId = (lista, id) => lista.find((x) => x.id === id) || lista[0];
-
-function mistura(hex, alvo, t) {
-  const n = parseInt(hex.slice(1), 16);
-  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255];
-  const m = (x) => Math.round(x + (alvo - x) * t);
-  return `#${[m(r), m(g), m(b)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
-}
 
 function luminancia(hex) {
   const n = parseInt(hex.slice(1), 16);
   return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 }
 
-export function avatarSVG(av, { tamanho = 40, animar = false } = {}) {
-  const forma = porId(FORMAS, av?.forma);
-  const rosto = porId(ROSTOS, av?.rosto);
+// Superelipse (|x|^5 + |y|^5 = 1): lados retos e cantos contínuos, como os ícones da Apple. Quadro de 100×100.
+const SQUIRCLE = (() => {
+  const n = 5, pts = [];
+  for (let i = 0; i < 160; i++) {
+    const t = (i / 160) * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+    const x = Math.sign(c) * Math.abs(c) ** (2 / n), y = Math.sign(s) * Math.abs(s) ** (2 / n);
+    pts.push(`${(50 + 50 * x).toFixed(2)} ${(50 + 50 * y).toFixed(2)}`);
+  }
+  return `M${pts.join('L')}Z`;
+})();
+
+export function avatarSVG(av, { tamanho = 40 } = {}) {
+  const glifo = porId(GLIFOS, av?.glifo);
   const cor = porId(CORES, av?.cor).hex;
-  const p = { c: cor, s: mistura(cor, 0, 0.32), l: mistura(cor, 255, 0.35) };
-  const f = luminancia(cor) < 0.45 ? '#F4F4F6' : '#141416';
-  const [fx, fy, esc] = forma.rosto;
-  return `<svg class="avatar-svg${animar ? ' animado' : ''}" viewBox="0 0 100 100" width="${tamanho}" height="${tamanho}" aria-hidden="true">`
-    + `<g class="cabeca">${forma.svg(p)}<g class="rosto" transform="translate(${fx} ${fy}) scale(${esc})"><g class="olhos">${rosto.svg({ f, c: cor })}</g></g></g></svg>`;
+  const escuro = av?.fundo === 'escuro';
+  const fundo = escuro ? '#1C1C1E' : cor;
+  const traco = escuro ? cor : luminancia(cor) > 0.72 ? '#1C1C1E' : '#FFFFFF';
+  const borda = escuro ? `<path d="${SQUIRCLE}" fill="none" stroke="#FFFFFF" stroke-opacity=".09" stroke-width="2"/>` : '';
+  return `<svg class="avatar-svg" viewBox="0 0 100 100" width="${tamanho}" height="${tamanho}" aria-hidden="true">`
+    + `<path d="${SQUIRCLE}" fill="${fundo}"/>${borda}`
+    + `<g transform="translate(22 22) scale(2.333)"><path d="${glifo.d}" fill="none" stroke="${traco}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
 }
 
 function hash(txt) {
@@ -106,13 +82,17 @@ function hash(txt) {
   return h;
 }
 
-// Bot criado antes dos avatares: um avatar fixo tirado do id (sempre o mesmo para o mesmo bot).
+// Bot sem avatar salvo (ou com o formato antigo): um avatar fixo tirado do id.
 export function avatarPadrao(id) {
   const h = hash(id);
-  return { forma: FORMAS[h % FORMAS.length].id, rosto: ROSTOS[(h >>> 8) % ROSTOS.length].id, cor: CORES[(h >>> 16) % CORES.length].id };
+  return { glifo: GLIFOS[h % GLIFOS.length].id, cor: CORES[(h >>> 8) % (CORES.length - 2)].id, fundo: 'cor' };
+}
+
+export function avatarValido(av) {
+  return !!(av && GLIFOS.some((g) => g.id === av.glifo) && CORES.some((c) => c.id === av.cor));
 }
 
 export function avatarAleatorio() {
   const r = (l) => l[Math.floor(Math.random() * l.length)].id;
-  return { forma: r(FORMAS), rosto: r(ROSTOS), cor: r(CORES) };
+  return { glifo: r(GLIFOS), cor: r(CORES.slice(0, -2)), fundo: 'cor' };
 }

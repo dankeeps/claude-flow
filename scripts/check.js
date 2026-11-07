@@ -7,8 +7,8 @@ import { config, expandir, HOME, IS_WIN } from '../server/config.js';
 import { acharChrome } from '../server/navegador.js';
 
 const linhas = [];
-const ok = (cond, nome, detalhe = '', dica = '') => linhas.push(`${cond ? '✅' : '❌'} ${nome}${detalhe ? ` — ${detalhe}` : ''}${!cond && dica ? `\n     → ${dica}` : ''}`);
-const aviso = (nome, detalhe) => linhas.push(`⚠️  ${nome} — ${detalhe}`);
+const ok = (cond, nome, detalhe = '', dica = '') => linhas.push(`${cond ? '[ok]   ' : '[falta]'} ${nome}${detalhe ? ` — ${detalhe}` : ''}${!cond && dica ? `\n          ${dica}` : ''}`);
+const aviso = (nome, detalhe) => linhas.push(`[aviso] ${nome} — ${detalhe}`);
 
 function rodar(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: 'utf8', shell: IS_WIN, timeout: 20000 });
