@@ -2,6 +2,7 @@
   "nome": "Bot Editor",
   "descricao": "Edição de anúncio e VSL vertical: transcreve, corta, busca B-roll (YouTube Shorts / TikTok / biblioteca), monta no modelo do Atlas e entrega na timeline sem renderizar.",
   "icone": "🎬",
+  "avatar": { "forma": "tela", "rosto": "visor", "cor": "coral" },
   "ordem": 10,
   "modelo": "opus",
   "esforco": "",

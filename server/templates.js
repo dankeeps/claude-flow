@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { REPO, IS_WIN, config, expandir, lerJSON, lerTexto, gravarTexto, gravarJSON } from './config.js';
-import { dirBot, novoBotBase, salvarBot, bots } from './store.js';
+import { dirBot, novoBotBase, salvarBot, bots, limparAvatar } from './store.js';
 
 const DIR = path.join(REPO, 'templates');
 
@@ -36,9 +36,10 @@ export function ligarSkill(origem, destino) {
   }
 }
 
-export function criarBot({ squad, nome, template: tid = 'em-branco', funcao = '', modelo = '' }) {
+export function criarBot({ squad, nome, template: tid = 'em-branco', funcao = '', modelo = '', avatar = null }) {
   const t = template(tid) || template('em-branco');
   const bot = novoBotBase({ squad, nome, template: t.id });
+  bot.avatar = limparAvatar(avatar) || limparAvatar(t.avatar);
   bot.modelo = modelo || t.modelo || '';
   bot.esforco = t.esforco || '';
   bot.conectores = [...(t.conectores || [])];

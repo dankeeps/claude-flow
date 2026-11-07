@@ -1,4 +1,6 @@
-// Claude Flow — app (PWA). Sem build: JavaScript puro, tudo neste arquivo.
+// Claude Flow — app (PWA). Sem build: JavaScript puro (os avatares ficam em avatar.js).
+import { avatarSVG, avatarPadrao, avatarAleatorio, FORMAS, ROSTOS, CORES } from './avatar.js';
+
 const S = {
   estado: null,
   msgs: new Map(), // bot -> [mensagens]
@@ -114,7 +116,10 @@ const ir = (hash) => { location.hash = hash; };
 window.addEventListener('hashchange', () => { lerRota(); renderTudo(); presenca(); });
 
 // ---------- lateral ----------
-function iconeBot(b) { return template(b.template)?.icone || '🤖'; }
+const avatarDe = (b) => b?.avatar || avatarPadrao(b?.id || 'bot');
+function iconeBot(b, tamanho = 32, animar = false) {
+  return h('span', { class: 'avatar', html: avatarSVG(avatarDe(b), { tamanho, animar }) });
+}
 function classeStatus(b) { return (b.status || 'ocioso').replace(' ', '-'); }
 function subtituloBot(b) {
   if (b.status === 'trabalhando') return 'trabalhando…';
@@ -187,10 +192,12 @@ async function carregarMsgs(botId, antes = null) {
 function renderBot(b) {
   const p = $('#principal');
   const sq = squad(b.squad);
+  const cab = topo(b.nome, subTopoBot(b),
+    h('button', { class: 'btn so-grande', onclick: () => ir(`#/squad/${b.squad}`) }, `💬 ${sq?.nome || 'Squad'}`),
+    h('button', { class: 'btn ic', title: 'Função, memória, conectores, skills', onclick: () => abrirPainel(b.id) }, '⚙︎'));
+  cab.insertBefore(h('button', { class: 'avatar-topo', title: 'Mudar a aparência', onclick: () => modalAparencia(b.id) }, iconeBot(b, 36)), cab.querySelector('.titulo'));
   p.replaceChildren(
-    topo(b.nome, subTopoBot(b),
-      h('button', { class: 'btn so-grande', onclick: () => ir(`#/squad/${b.squad}`) }, `💬 ${sq?.nome || 'Squad'}`),
-      h('button', { class: 'btn ic', title: 'Função, memória, conectores, skills', onclick: () => abrirPainel(b.id) }, '⚙︎')),
+    cab,
     h('div', { class: 'mensagens', id: 'mensagens' }, h('div', { class: 'estreito', id: 'lista-msgs' })),
     compositor(b));
   S.naoLidas.delete(b.id);
@@ -262,7 +269,7 @@ function renderMsgs(rolar = false) {
   else if (b.status === 'trabalhando') nos.push(h('div', { class: 'trabalhando-linha' }, h('i', { class: 'ponto trabalhando' }), 'trabalhando…'));
   if (!lista.length && !delta) {
     const t = template(b.template);
-    nos.push(h('div', { class: 'vazio' }, h('div', { style: { fontSize: '34px' } }, t?.icone || '🤖'), h('p', {}, `Converse com ${b.nome}.`),
+    nos.push(h('div', { class: 'vazio' }, iconeBot(b, 104, true), h('p', {}, `Converse com ${b.nome}.`),
       h('p', { class: 'dica' }, t?.id === 'em-branco' ? 'Comece dizendo a função dele: "Sua função é…". Ele grava e lembra em todas as sessões.' : t?.descricao || '')));
   }
   cont.replaceChildren(...nos);
@@ -357,7 +364,7 @@ async function abrirPainel(botId, aba) {
     abasEl.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x.dataset.aba === S.painelAba));
   };
   const abasEl = h('div', { class: 'abas' }, abas.map(([k, n]) => h('button', { 'data-aba': k, onclick: () => { S.painelAba = k; desenhar(); } }, n)));
-  p.replaceChildren(h('div', { class: 'cab' }, h('span', { style: { fontSize: '20px' } }, iconeBot(b)), h('b', {}, b.nome), h('button', { class: 'btn-txt', onclick: fecharPainel }, '✕')), abasEl, corpo);
+  p.replaceChildren(h('div', { class: 'cab' }, h('button', { class: 'avatar-topo', title: 'Mudar a aparência', onclick: () => modalAparencia(b.id) }, iconeBot(b, 30)), h('b', {}, b.nome), h('button', { class: 'btn-txt', onclick: fecharPainel }, '✕')), abasEl, corpo);
   desenhar();
 }
 const fecharPainel = () => { $('#painel').hidden = true; };
@@ -466,7 +473,7 @@ function painelConteudo(b, d, aba) {
       h('button', { class: 'btn', onclick: tenta(async () => { await api('POST', `/api/bots/${b.id}/parar`, { limparFila: true }); aviso('Parado', 'Fila limpa.'); }) }, 'Parar e limpar fila')),
     h('h2', { class: 'sec' }, 'Bot'),
     h('div', { class: 'acoes-lin' },
-      h('button', { class: 'btn', onclick: tenta(async () => { const n = prompt('Novo nome do bot', b.nome); if (n?.trim()) { await salvarBot(b.id, { nome: n.trim() }); abrirPainel(b.id); } }) }, 'Renomear'),
+      h('button', { class: 'btn', onclick: () => modalAparencia(b.id) }, 'Nome e aparência'),
       h('button', { class: 'btn perigo', onclick: tenta(async () => { if (!confirm(`Apagar ${b.nome}? A pasta dele vai para ~/ClaudeFlow/lixeira.`)) return; await api('DELETE', `/api/bots/${b.id}`); fecharPainel(); ir('#/'); }) }, 'Apagar bot')),
   ];
 }
@@ -620,34 +627,107 @@ function modal(...conteudo) {
 }
 const fecharModal = () => { $('#modal').hidden = true; };
 
-function modalNovoBot(squadId) {
-  let tpl = S.estado.templates[0]?.id;
-  const sqSel = h('select', { class: 'ent' }, S.estado.squads.map((s) => h('option', { value: s.id, selected: s.id === squadId }, s.nome)));
-  const nome = h('input', { class: 'ent', placeholder: 'Nome do bot' });
-  const funcao = h('textarea', { class: 'ent', rows: 4, style: { minHeight: '90px' }, placeholder: 'Opcional: "Sua função é…" (dá para definir depois, pelo chat)' });
-  const cartoes = h('div', { style: { display: 'grid', gap: '8px' } });
-  const desenhar = () => {
-    cartoes.replaceChildren(...S.estado.templates.map((t) => h('div', { class: `cartao tpl${t.id === tpl ? ' sel' : ''}`, onclick: () => { tpl = t.id; if (!nome.value || S.estado.templates.some((x) => x.nome === nome.value)) nome.value = t.id === 'em-branco' ? '' : t.nome; desenhar(); } },
-      h('span', { class: 'ic' }, t.icone || '🤖'), h('div', {}, h('b', {}, t.nome), h('small', {}, t.descricao)))));
-    funcao.parentElement && (funcao.parentElement.hidden = tpl !== 'em-branco');
-  };
-  nome.value = template(tpl)?.id === 'em-branco' ? '' : template(tpl)?.nome || '';
-  const campoFuncao = h('label', { class: 'campo' }, 'Função', funcao);
-  modal(h('h3', {}, 'Novo bot'),
-    h('label', { class: 'campo' }, 'Squad', sqSel),
-    h('div', { class: 'campo' }, 'Template', cartoes),
-    h('label', { class: 'campo' }, 'Nome', nome),
-    campoFuncao,
-    h('div', { class: 'acoes-lin' },
-      h('button', { class: 'btn prim', onclick: tenta(async () => {
-        if (!sqSel.value) throw new Error('Crie um squad primeiro.');
-        const b = await api('POST', '/api/bots', { squad: sqSel.value, nome: nome.value.trim(), template: tpl, funcao: tpl === 'em-branco' ? funcao.value : '' });
-        fecharModal(); await recarregarEstado(); ir(`#/bot/${b.id}`);
-      }) }, 'Criar bot'),
-      h('button', { class: 'btn', onclick: fecharModal }, 'Cancelar')));
+// Editor de avatar: prévia grande (pisca e flutua) + forma, rosto e cor. As opções de forma e rosto são desenhadas
+// já com a cor e o resto escolhido, para a pessoa ver como fica antes de tocar.
+function editorAvatar(av, aoMudar) {
+  const prev = h('div', { class: 'av-prev' });
+  const formas = h('div', { class: 'av-grade' });
+  const rostos = h('div', { class: 'av-grade' });
+  const cores = h('div', { class: 'av-cores' });
+  const escolher = (campo, valor) => { av[campo] = valor; desenhar(); aoMudar?.(); };
+  const opcao = (campo, item, variante) => h('button', {
+    class: `av-op${av[campo] === item.id ? ' sel' : ''}`, title: item.nome, 'aria-label': item.nome,
+    onclick: () => escolher(campo, item.id), html: avatarSVG(variante, { tamanho: 42 }),
+  });
+  function desenhar() {
+    prev.innerHTML = avatarSVG(av, { tamanho: 136, animar: true });
+    formas.replaceChildren(...FORMAS.map((f) => opcao('forma', f, { ...av, forma: f.id })));
+    rostos.replaceChildren(...ROSTOS.map((r) => opcao('rosto', r, { ...av, rosto: r.id })));
+    cores.replaceChildren(...CORES.map((c) => h('button', {
+      class: `av-cor${av.cor === c.id ? ' sel' : ''}`, title: c.nome, 'aria-label': c.nome, style: { background: c.hex }, onclick: () => escolher('cor', c.id),
+    })));
+  }
   desenhar();
-  campoFuncao.hidden = tpl !== 'em-branco';
-  setTimeout(() => nome.focus(), 50);
+  const dado = h('button', { class: 'av-dado', title: 'Sortear um avatar', 'aria-label': 'Sortear', onclick: () => { Object.assign(av, avatarAleatorio()); desenhar(); aoMudar?.(); } }, '⟳');
+  return {
+    desenhar,
+    topo: h('div', { class: 'av-topo' }, prev, dado),
+    opcoes: h('div', {}, h('div', { class: 'av-rot' }, 'Forma'), formas, h('div', { class: 'av-rot' }, 'Rosto'), rostos, h('div', { class: 'av-rot' }, 'Cor'), cores),
+  };
+}
+
+function cabModal(titulo) {
+  return h('div', { class: 'm-cab' }, h('button', { class: 'btn-txt', title: 'Fechar', onclick: fecharModal }, '✕'), h('b', {}, titulo), h('span'));
+}
+
+function modalNovoBot(squadId) {
+  const tpls = S.estado.templates;
+  let tpl = tpls[0]?.id;
+  let mexeu = false; // depois que a pessoa mexe no avatar, trocar de template não muda mais o desenho
+  const av = { ...(template(tpl)?.avatar || avatarAleatorio()) };
+  const ed = editorAvatar(av, () => { mexeu = true; });
+  const nome = h('input', { class: 'ent av-nome', placeholder: 'Dê um nome ao seu bot', maxlength: 40, autocomplete: 'off' });
+  const criar = h('button', { class: 'btn prim av-criar', disabled: true }, 'Criar bot');
+  const atualizarCriar = () => { criar.disabled = !nome.value.trim(); };
+  nome.addEventListener('input', atualizarCriar);
+  nome.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !criar.disabled) criar.click(); });
+
+  const sqSel = h('select', { class: 'ent' }, S.estado.squads.map((s) => h('option', { value: s.id, selected: s.id === squadId }, s.nome)));
+  const campoSquad = h('label', { class: 'campo' }, 'Squad', sqSel);
+  campoSquad.hidden = S.estado.squads.length < 2;
+  const funcao = h('textarea', { class: 'ent', rows: 4, style: { minHeight: '90px' }, placeholder: 'Opcional: "Sua função é…" (dá para definir depois, pelo chat)' });
+  const campoFuncao = h('label', { class: 'campo', style: { marginTop: '14px' } }, 'Função', funcao);
+  const chips = h('div', { class: 'tpl-chips' });
+  const descricao = h('p', { class: 'dica', style: { margin: '8px 0 0' } });
+
+  const desenharTemplates = () => {
+    chips.replaceChildren(...tpls.map((t) => h('button', {
+      class: `tpl-chip${t.id === tpl ? ' sel' : ''}`,
+      onclick: () => {
+        const nomeEraDoTemplate = !nome.value.trim() || tpls.some((x) => x.nome === nome.value.trim());
+        tpl = t.id;
+        if (!mexeu) { Object.assign(av, t.avatar || avatarAleatorio()); ed.desenhar(); }
+        if (nomeEraDoTemplate) nome.value = t.id === 'em-branco' ? '' : t.nome;
+        atualizarCriar(); desenharTemplates();
+      },
+    }, h('span', { class: 'avatar', html: avatarSVG(t.avatar || { forma: 'orbe', rosto: 'pontos', cor: 'gelo' }, { tamanho: 22 }) }), t.nome)));
+    descricao.textContent = template(tpl)?.descricao || '';
+    campoFuncao.hidden = tpl !== 'em-branco';
+  };
+  nome.value = tpl === 'em-branco' ? '' : template(tpl)?.nome || '';
+  desenharTemplates();
+  atualizarCriar();
+
+  criar.onclick = tenta(async () => {
+    if (!sqSel.value) throw new Error('Crie um squad primeiro.');
+    criar.disabled = true;
+    try {
+      const b = await api('POST', '/api/bots', { squad: sqSel.value, nome: nome.value.trim(), template: tpl, avatar: { ...av }, funcao: tpl === 'em-branco' ? funcao.value : '' });
+      fecharModal(); await recarregarEstado(); ir(`#/bot/${b.id}`);
+    } finally { atualizarCriar(); }
+  });
+
+  modal(cabModal('Novo bot'), ed.topo, nome,
+    h('div', { class: 'av-rot' }, 'Template'), chips, descricao,
+    ed.opcoes,
+    h('div', { style: { marginTop: '18px' } }, campoSquad), campoFuncao,
+    criar);
+  if (!ehToque) setTimeout(() => nome.focus(), 50);
+}
+
+function modalAparencia(botId) {
+  const b = bot(botId);
+  if (!b) return;
+  const av = { ...avatarDe(b) };
+  const ed = editorAvatar(av);
+  const nome = h('input', { class: 'ent av-nome', value: b.nome, maxlength: 40, autocomplete: 'off' });
+  const salvar = h('button', { class: 'btn prim av-criar', onclick: tenta(async () => {
+    if (!nome.value.trim()) throw new Error('O bot precisa de um nome.');
+    await salvarBot(b.id, { nome: nome.value.trim(), avatar: { ...av } });
+    fecharModal(); await recarregarEstado(); renderPrincipal();
+    if (!$('#painel').hidden) abrirPainel(b.id);
+  }) }, 'Salvar');
+  modal(cabModal('Nome e aparência'), ed.topo, nome, ed.opcoes, salvar);
 }
 
 function modalNovoSquad() {

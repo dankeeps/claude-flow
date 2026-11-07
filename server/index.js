@@ -189,6 +189,8 @@ rota('PATCH', '/api/bots/:id', async ({ p, corpo }) => {
   const bot = pegarBot(p.id);
   const campos = ['nome', 'modelo', 'esforco', 'autonomia', 'conectores', 'navegador', 'pastas', 'prefs', 'env'];
   for (const c of campos) if (corpo[c] !== undefined) bot[c] = corpo[c];
+  if (corpo.avatar !== undefined) bot.avatar = store.limparAvatar(corpo.avatar);
+  if (typeof bot.nome === 'string') bot.nome = bot.nome.trim().slice(0, 40) || 'Bot';
   if (corpo.squad && corpo.squad !== bot.squad) throw Object.assign(new Error('para mudar de squad, crie o bot no outro squad'), { status: 400 });
   marcarSujo(bot);
   if (corpo.nome) sujarSquad(bot.squad);

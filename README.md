@@ -18,7 +18,8 @@ bot está trabalhando; parado, ele não gasta nada.
 
 | | |
 |---|---|
-| **Bots em vez de sessões** | Cada bot tem nome, **função** ("inteligência matriz"), preferências, skills, conectores, modelo e pasta própria. "Sua função é…" / "atualize sua função" no chat → ele grava e vale para sempre. |
+| **Bots em vez de sessões** | Cada bot tem nome, **avatar**, **função** ("inteligência matriz"), preferências, skills, conectores, modelo e pasta própria. "Sua função é…" / "atualize sua função" no chat → ele grava e vale para sempre. |
+| **Avatar personalizável** | Na criação (e depois, tocando no avatar): uma cabecinha de robô/aparelho montada com **forma** (orbe, tela, chip, capacete, planeta, fone, TV, cápsula, hexa, satélite), **rosto** (8) e **cor** (13), com sorteio. Desenho vetorial próprio (`web/avatar.js`); o bot guarda só `{forma, rosto, cor}`. |
 | **Squads** | Um squad é um time de bots que conversam entre si (`bot_enviar`, com ou sem esperar a resposta) e dividem um **quadro**. Um squad não enxerga o outro. Trava contra bots conversando em loop. |
 | **Memória que dura** | Ideia do Hermes Agent: memória curta e curada pelo próprio bot (com limite de tamanho) + resumo de cada sessão + **busca no histórico inteiro** (SQLite FTS5). A sessão é **compactada** sozinha a cada 7 dias ou quando passa de 60% da janela; a transcrição bruta vira `.gz` e some depois de 30 dias. Detalhes em [docs/memoria.md](docs/memoria.md). |
 | **Templates** | Na hora de criar um bot você escolhe o template e o nome. Já vem o **Bot Editor** (e o "Em branco"). |
