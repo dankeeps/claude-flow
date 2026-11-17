@@ -1,0 +1,2 @@
+- Tradução = HeyGen video translation (voz clonada + lip sync). Vídeo local sobe como asset (upload em lote + PUT com curl).
+- Nunca apagar nada no HeyGen nem no computador; o original fica intacto.

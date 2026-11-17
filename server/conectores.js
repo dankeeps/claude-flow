@@ -14,6 +14,7 @@ import spawn from 'cross-spawn';
 import { REPO, HOME, IS_WIN, config, expandir, lerJSON, gravarJSON, segredos } from './config.js';
 import { dirBot, conectoresDoBot } from './store.js';
 import { perfilDoBot, endpoint } from './navegador.js';
+import * as voicestudio from './voicestudio.js';
 
 const require = createRequire(import.meta.url);
 export const catalogo = () => lerJSON(path.join(REPO, 'conectores', 'catalogo.json'), { conectores: [] }).conectores;
@@ -181,6 +182,15 @@ export function montarMcp(bot, { flowUrl }) {
       continue;
     }
     if (c.tipo === 'atlas') { ativos.push(c); continue; }
+    if (c.tipo === 'voicestudio') { // servidor local do VoiceStudio (o runner liga ele antes do turno)
+      if (!voicestudio.onde().instalado) { avisos.push('VoiceStudio: não está instalado neste computador.'); continue; }
+      servidores.voicestudio = { type: 'http', url: voicestudio.URL_MCP, headers: { 'X-OmniVoice-Client-Id': `claude-flow-${bot.id}` } };
+      ativos.push({ ...c, prefixo: 'mcp__voicestudio' });
+      continue;
+    }
+    if (c.tipo === 'integracao') { if ((c.segredos || []).every((x) => chaves[nomeChave(c, x)])) ativos.push(c); continue; } // chave vira variável (skill do bot usa)
+    if (c.tipo === 'chatgpt') { ativos.push(c); continue; } // vem pelos apps da conta do ChatGPT
+    if (c.tipo === 'grok') continue; // é motor, não conector
     const faltando = new Set();
     const valores = valoresDaInstancia(c, chaves);
     const nome = nomeServidor(c);
@@ -241,6 +251,14 @@ export function atualizarStatusClaude() {
 
 // Situação de cada conector para o app (as chaves nunca saem daqui, só "salva" ou não):
 // conectado | entrar (refazer login no claude.ai) | falhou | desconectado | verificando | configurar | login | local
+// Grok Build (xAI): instalado em ~/.grok/bin e com login salvo em ~/.grok/auth.json (o "grok login" grava ali).
+// Só olha se os arquivos existem; o conteúdo do login nunca é lido aqui.
+export const grokBin = () => path.join(os.homedir(), '.grok', 'bin', IS_WIN ? 'grok.exe' : 'grok');
+function situacaoGrok() {
+  if (!fs.existsSync(grokBin())) return 'instalar';
+  return fs.existsSync(path.join(os.homedir(), '.grok', 'auth.json')) ? 'conectado' : 'entrarGrok';
+}
+
 export function statusConectores() {
   const chaves = segredos();
   return instancias().map((c) => {
@@ -251,6 +269,9 @@ export function statusConectores() {
       const st = statusClaude[c.servidor];
       situacao = st === 'connected' ? 'conectado' : st === 'needs-auth' ? 'entrar' : st === 'failed' ? 'falhou' : statusQuando ? 'desconectado' : 'verificando';
     } else if (c.tipo === 'navegador' || c.tipo === 'atlas') situacao = 'local';
+    else if (c.tipo === 'voicestudio') situacao = voicestudio.onde().instalado ? 'local' : 'instalar';
+    else if (c.tipo === 'chatgpt') situacao = 'chatgpt';
+    else if (c.tipo === 'grok') situacao = situacaoGrok();
     else if (c.oauth) situacao = 'login';
     else situacao = segs.every((s) => s.salva) && camposOk ? 'conectado' : 'configurar';
     return { ...c, segredos: segs, chavesOk: segs.every((s) => s.salva), camposOk, situacao };

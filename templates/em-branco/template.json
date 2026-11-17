@@ -2,7 +2,7 @@
   "nome": "Em branco",
   "descricao": "Bot sem função definida: na primeira conversa você diz o que ele faz (\"sua função é…\") e ele grava.",
   "ordem": 90,
-  "modelo": "",
+  "modelo": "gpt-6.1-sol",
   "autonomia": "total",
   "navegador": "principal",
   "conectores": [],

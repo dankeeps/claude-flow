@@ -1,0 +1,27 @@
+{
+  "nome": "Head",
+  "descricao": "O gerente do squad: enquanto um bot trabalha, passa de tempos em tempos para conferir se ele está fazendo o que foi pedido, do jeito combinado, e faz uma última conferência quando ele termina. Corrige o rumo direto com o bot e avisa você só do que importa.",
+  "avatar": {
+    "planeta": "sol"
+  },
+  "ordem": 5,
+  "modelo": "gpt-6.1-sol",
+  "esforco": "medium",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": [],
+  "pastas": [],
+  "env": {},
+  "preferencias": [
+    {
+      "chave": "rigor",
+      "rotulo": "Rigor",
+      "tipo": "escolha",
+      "opcoes": [
+        "tolerante: só corrige o que muda o resultado",
+        "à risca: corrige qualquer desvio das regras"
+      ],
+      "padrao": "tolerante: só corrige o que muda o resultado"
+    }
+  ]
+}

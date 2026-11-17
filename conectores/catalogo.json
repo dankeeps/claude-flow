@@ -112,6 +112,41 @@
       "descricao": "Contas de anúncio, campanhas, criativos, métricas e Biblioteca de Anúncios."
     },
     {
+      "id": "cloudflare-r2",
+      "icone": "cloudflare.svg",
+      "nome": "Cloudflare R2",
+      "grupo": "Tráfego",
+      "tipo": "integracao",
+      "segredos": [
+        {
+          "nome": "CLOUDFLARE_R2_CONTA",
+          "rotulo": "ID da conta (Account ID)",
+          "ajuda": "dash.cloudflare.com → R2 Object Storage: o Account ID aparece na lateral direita da página do R2."
+        },
+        {
+          "nome": "CLOUDFLARE_R2_CHAVE_ID",
+          "rotulo": "Access Key ID",
+          "ajuda": "R2 → Manage API tokens → Create API token → permissão \"Object Read & Write\", só no bucket dos anúncios. Copie o Access Key ID e o Secret (o Secret aparece uma vez só)."
+        },
+        {
+          "nome": "CLOUDFLARE_R2_SEGREDO",
+          "rotulo": "Secret Access Key"
+        },
+        {
+          "nome": "CLOUDFLARE_R2_BUCKET",
+          "rotulo": "Nome do bucket",
+          "ajuda": "Ex.: anuncios. R2 → Create bucket."
+        },
+        {
+          "nome": "CLOUDFLARE_R2_URL_PUBLICA",
+          "rotulo": "URL pública do bucket",
+          "ajuda": "No bucket: Settings → Public access → ligue o \"R2.dev subdomain\" (ou um domínio seu) e copie o endereço, ex.: https://pub-xxxx.r2.dev"
+        }
+      ],
+      "descricao": "Hospeda vídeos e imagens no seu bucket R2 e gera o link público direto, para subir anúncios em vídeo no Meta Ads pela URL. Só envia arquivo novo: nunca apaga nem sobrescreve.",
+      "instrucao": "Para subir um vídeo no Meta Ads: mcp__flow__nuvem_enviar com o caminho do vídeo final → pegue o link → ads_creative_upload_media com upload_source \"URL\", media_type \"VIDEO\", media_url = o link. Depois acompanhe ads_get_ad_videos até o status ficar \"ready\" antes de criar o criativo. Criar ou ativar campanha/anúncio só com o OK do usuário."
+    },
+    {
       "id": "higgsfield",
       "icone": "higgsfield.png",
       "iconeCheio": true,
@@ -120,6 +155,70 @@
       "tipo": "claudeai",
       "servidor": "claude.ai higgsfield",
       "descricao": "Geração de imagem e vídeo por IA."
+    },
+    {
+      "id": "kie-ai",
+      "icone": "kie.svg",
+      "nome": "kie.ai",
+      "grupo": "Criação",
+      "tipo": "integracao",
+      "segredos": [
+        {
+          "nome": "KIE_API_KEY",
+          "rotulo": "Chave da API",
+          "ajuda": "kie.ai/api-key → crie uma chave (dá para limitar o gasto por chave)."
+        }
+      ],
+      "descricao": "Vídeo e imagem por IA com os seus créditos da kie.ai: Kling 3.0, Seedance 2, Veo 3.1, Wan, Hailuo, Grok Imagine, Nano Banana Pro, GPT Image, Seedream.",
+      "instrucao": "Use mcp__flow__kie_gerar (modelo + input do modelo; caminhos locais de imagem sobem sozinhos) e entregue o arquivo baixado com arquivo_entregar/quadro_entregar. Gasta créditos do usuário: gere só o que ele pediu, teste 1 antes de gerar em lote, e confira o saldo com kie_creditos antes de lotes grandes. Modelos e campos principais: VÍDEO — \"kling-3.0/video\" {prompt, image_urls[] (1º/último quadro, opcional), duration \"3\"–\"15\" (texto), aspect_ratio \"16:9\"|\"9:16\"|\"1:1\", mode \"std\"(720p)|\"pro\"(1080p), sound true/false, multi_shots false}; \"bytedance/seedance-2\" {prompt, first_frame_url | reference_image_urls[] (até 9), duration 4–15, aspect_ratio \"9:16\"…, resolution \"720p\"|\"1080p\", generate_audio}; \"veo-3-1\" {prompt, model \"veo3_fast\"|\"veo3_lite\"|\"veo3\", image_urls[], generation_type \"TEXT_2_VIDEO\"|\"FIRST_AND_LAST_FRAMES_2_VIDEO\"|\"REFERENCE_2_VIDEO\", aspect_ratio \"16:9\"|\"9:16\", resolution \"720p\"|\"1080p\", duration 4|6|8}; \"wan/2-7-text-to-video\" {prompt, ratio, duration 2–15, resolution}; \"grok-imagine/text-to-video\" {prompt, aspect_ratio, duration 6–30, resolution}. IMAGEM — \"nano-banana-pro\" {prompt, image_input[] (até 8 referências), aspect_ratio, resolution \"1K\"|\"2K\"|\"4K\"}; \"gpt-image-2-text-to-image\" {prompt, aspect_ratio, resolution}; \"seedream/5-5-text-to-image\" {prompt, aspect_ratio, size}. Outro modelo ou dúvida de campo: confira em docs.kie.ai antes de gastar."
+    },
+    {
+      "id": "heygen",
+      "nome": "HeyGen",
+      "grupo": "Criação",
+      "tipo": "claudeai",
+      "servidor": "claude.ai HeyGen",
+      "urlMcp": "https://mcp.heygen.com/mcp/v1",
+      "descricao": "Vídeos com avatar (Video Agent, seus avatares e vozes), usando os créditos do seu plano do site da HeyGen. Funciona nos bots que estão no Claude.",
+      "instrucao": "Vídeo da HeyGen: depois de pedir, acompanhe o status até ficar pronto, baixe o arquivo do link do resultado para trabalho/entregas e entregue com mcp__flow__arquivo_entregar (aparece no chat com player)."
+    },
+    {
+      "id": "facebook-chatgpt",
+      "nome": "Facebook (Meta Ads)",
+      "icone": "facebook.svg",
+      "grupo": "Dados e vendas",
+      "tipo": "chatgpt",
+      "descricao": "Métricas das campanhas do Meta Ads (CPA, CPC, CPM, hook rate…) pelo app do Facebook conectado na sua conta do ChatGPT. Para conectar: chatgpt.com → Configurações → Apps → Facebook/Meta Ads."
+    },
+    {
+      "id": "vturb",
+      "nome": "VTurb",
+      "icone": "vturb.png",
+      "grupo": "Dados e vendas",
+      "tipo": "integracao",
+      "segredos": [
+        {
+          "nome": "VTURB_API_KEY",
+          "rotulo": "Chave da Analytics API",
+          "ajuda": "No painel da VTurb: Configurações → Analytics API → Gerar nova chave (app.vturb.com/settings/analytics-api)."
+        }
+      ],
+      "descricao": "Retenção, retenção no pitch, play rate e conversão de cada VSL, pela Analytics API da VTurb. Usado pelo Analista de dados (skill vturb)."
+    },
+    {
+      "id": "hubla",
+      "nome": "Hubla",
+      "icone": "hubla.png",
+      "grupo": "Dados e vendas",
+      "tipo": "integracao",
+      "segredos": [
+        {
+          "nome": "HUBLA_API_TOKEN",
+          "rotulo": "Token da API pública",
+          "ajuda": "Na Hubla: Integrações → Criar nova integração → Ferramentas de Integração e Automação → Tokens de API Pública → Configurar → Criar token (aparece uma vez só)."
+        }
+      ],
+      "descricao": "Vendas, reembolsos, disputas e chargebacks pela API pública da Hubla (só leitura). Usado pela Secretária (skill hubla)."
     },
     {
       "id": "navegador",
@@ -135,6 +234,14 @@
       "grupo": "Claude Flow",
       "tipo": "atlas",
       "descricao": "O editor com timeline em localhost:4123. Não é instalado pelo Claude Flow: já está no computador. O Bot Editor entrega a edição nele."
+    },
+    {
+      "id": "grok",
+      "nome": "Grok (xAI)",
+      "grupo": "Motores de IA",
+      "tipo": "grok",
+      "motor": true,
+      "descricao": "Usa o seu plano do Grok (SuperGrok) pelo Grok Build, o programa oficial da xAI que roda neste PC — igual o ChatGPT usa o seu plano pelo Codex. Sem chave paga: o login fica salvo no PC."
     },
     {
       "id": "apify",
@@ -222,7 +329,11 @@
       "tipo": "stdio",
       "comando": "uvx",
       "args": [
-        "elevenlabs-mcp"
+        "--from",
+        "elevenlabs-mcp",
+        "python",
+        "-m",
+        "elevenlabs_mcp.server"
       ],
       "env": {
         "ELEVENLABS_API_KEY": "${ELEVENLABS_API_KEY}"
@@ -234,8 +345,17 @@
           "ajuda": "elevenlabs.io > Profile > API Keys"
         }
       ],
-      "descricao": "Voz (texto para fala, vozes clonadas). Precisa do uv instalado.",
-      "multiContas": true
+      "descricao": "Voz (texto para fala, suas vozes clonadas, efeitos sonoros). Usa os créditos do seu plano da ElevenLabs pela chave de API.",
+      "multiContas": true,
+      "instrucao": "Áudio gerado pela ElevenLabs: salve em trabalho/entregas e entregue com mcp__flow__arquivo_entregar (aparece no chat com player)."
+    },
+    {
+      "id": "voicestudio",
+      "nome": "VoiceStudio",
+      "grupo": "Criação",
+      "tipo": "voicestudio",
+      "descricao": "Estúdio de voz open source rodando na sua placa de vídeo (alternativa ao ElevenLabs, sem créditos): texto para fala, clonar voz, criar voz por descrição e transcrever. O Claude Flow liga ele sozinho quando o bot precisa.",
+      "instrucao": "VoiceStudio (ferramentas mcp__voicestudio__*): para clonar uma voz, copie o áudio de referência para a pasta $FLOW_HOME/voicestudio/referencias e passe ref_audio_path relativo (ex.: referencias/voz.wav). O generate_speech grava o áudio na pasta do VoiceStudio e devolve output_path: copie esse arquivo para trabalho/entregas e entregue com mcp__flow__arquivo_entregar (aparece no chat com player). Se der erro de licença do modelo, avise o usuário: ele aceita a licença no próprio VoiceStudio, você não aceita por ele."
     }
   ]
 }

@@ -77,19 +77,26 @@ CREATE INDEX IF NOT EXISTS tarefa_eventos_t ON tarefa_eventos(tarefa, id);
 
 // ---------- tarefas ----------
 const STATUS = ['afazer', 'fazendo', 'revisao', 'feito'];
+// prazo: até quando (ms); inicio: quando o bot começa sozinho (ms, agendamento); iniciado: quando o agendador mandou
+for (const col of ['prazo INTEGER', 'inicio INTEGER', 'iniciado INTEGER']) {
+  try { db.exec(`ALTER TABLE tarefas ADD COLUMN ${col}`); } catch {} // já existe
+}
+// Responsável "Keeps": o próprio usuário (tarefa dele, não de um bot)
+export const KEEPS = 'keeps';
 export const statusValido = (s) => STATUS.includes(s);
 const tarefaLinha = (r) => r && { id: Number(r.id), squad: r.squad, bot: r.bot, titulo: r.titulo, descricao: r.descricao || '', entregaveis: r.entregaveis || '',
-  status: r.status, criadoPor: r.criado_por, pai: r.pai ? Number(r.pai) : null, ordem: r.ordem, criado: r.criado, atualizado: r.atualizado };
+  status: r.status, criadoPor: r.criado_por, pai: r.pai ? Number(r.pai) : null, ordem: r.ordem, criado: r.criado, atualizado: r.atualizado,
+  prazo: r.prazo ?? null, inicio: r.inicio ?? null, iniciado: r.iniciado ?? null };
 
-export function criarTarefa({ squad, bot = null, titulo, descricao = '', entregaveis = '', status = 'afazer', criadoPor = 'usuario', pai = null }) {
+export function criarTarefa({ squad, bot = null, titulo, descricao = '', entregaveis = '', status = 'afazer', criadoPor = 'usuario', pai = null, prazo = null, inicio = null }) {
   const agora = Date.now();
-  const r = db.prepare(`INSERT INTO tarefas (squad, bot, titulo, descricao, entregaveis, status, criado_por, pai, ordem, criado, atualizado)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(squad, bot, titulo, descricao, entregaveis, statusValido(status) ? status : 'afazer', criadoPor, pai, agora, agora, agora);
+  const r = db.prepare(`INSERT INTO tarefas (squad, bot, titulo, descricao, entregaveis, status, criado_por, pai, ordem, criado, atualizado, prazo, inicio)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(squad, bot, titulo, descricao, entregaveis, statusValido(status) ? status : 'afazer', criadoPor, pai, agora, agora, agora, prazo, inicio);
   return pegarTarefa(Number(r.lastInsertRowid));
 }
 export const pegarTarefa = (id) => tarefaLinha(db.prepare('SELECT * FROM tarefas WHERE id = ?').get(id));
 export function atualizarTarefa(id, campos) {
-  const map = { bot: 'bot', titulo: 'titulo', descricao: 'descricao', entregaveis: 'entregaveis', status: 'status', ordem: 'ordem' };
+  const map = { bot: 'bot', titulo: 'titulo', descricao: 'descricao', entregaveis: 'entregaveis', status: 'status', ordem: 'ordem', prazo: 'prazo', inicio: 'inicio', iniciado: 'iniciado' };
   const sets = [], vals = [];
   for (const [k, col] of Object.entries(map)) if (campos[k] !== undefined) { sets.push(`${col} = ?`); vals.push(campos[k]); }
   if (!sets.length) return pegarTarefa(id);
@@ -100,6 +107,8 @@ export function apagarTarefa(id) {
   db.prepare('DELETE FROM tarefa_eventos WHERE tarefa = ?').run(id);
   db.prepare('DELETE FROM tarefas WHERE id = ?').run(id);
 }
+// agendadas que já chegaram na hora e ainda não foram mandadas ao bot
+export const tarefasAgendadasVencidas = (agora) => db.prepare("SELECT * FROM tarefas WHERE inicio IS NOT NULL AND inicio <= ? AND iniciado IS NULL AND status = 'afazer' ORDER BY inicio, id").all(agora).map(tarefaLinha);
 export const tarefasDoSquad = (squad) => db.prepare('SELECT * FROM tarefas WHERE squad = ? ORDER BY ordem, id').all(squad).map(tarefaLinha);
 export const tarefasDoBot = (bot, { abertas = true } = {}) => db.prepare(`SELECT * FROM tarefas WHERE bot = ? ${abertas ? "AND status != 'feito'" : ''} ORDER BY ordem, id`).all(bot).map(tarefaLinha);
 export function addEvento(tarefa, { autor = 'usuario', tipo, texto = '' }) {

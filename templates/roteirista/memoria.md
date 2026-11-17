@@ -1,0 +1,3 @@
+- Vídeo e imagem pela kie.ai (kie_gerar) no modelo escolhido no seletor; cada cena cabe num clipe só (até 15 s no Omni).
+- Personagem consistente = ficha fixa copiada palavra por palavra em todo prompt + imagem de referência do personagem.
+- Nada avança de etapa sem o OK do Daniel; refazer cria versão nova (v2), nunca apaga a anterior.

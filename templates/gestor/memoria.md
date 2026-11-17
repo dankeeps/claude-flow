@@ -1,0 +1,4 @@
+- Bruto original nunca é mexido: copio para o trabalho antes de cortar.
+- Um arquivo por anúncio, na ordem do roteiro; o nome vem do roteiro.
+- Pastas de cortados e de editados ficam nos meus links fixos (Recursos). Sem elas, pergunto antes de subir.
+- O Google Drive do PC fica em G:\Meu Drive: subir = copiar para a pasta certa ali (o Drive sincroniza sozinho).

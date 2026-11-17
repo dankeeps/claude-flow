@@ -8,12 +8,15 @@ import * as runner from './runner.js';
 import { bots, squads, dirBot } from './store.js';
 import { emitir, notificar } from './eventos.js';
 import { config } from './config.js';
+import * as galaxia from './galaxia.js';
 
 export const ROTULO = { afazer: 'A fazer', fazendo: 'Fazendo', revisao: 'Revisão', feito: 'Feito' };
 
 const simples = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'tarefa';
 export const nomeAutor = (a) => (a === 'usuario' ? 'você' : `@${bots.get(a)?.nome || a}`);
+export const nomeResponsavel = (id) => (id === db.KEEPS ? 'Keeps' : `@${bots.get(id)?.nome || id}`);
+const quandoOuNada = (v) => (v === null || v === '' || v === undefined ? null : Number.isFinite(Number(v)) ? Number(v) : (Date.parse(v) || null));
 
 // Pasta da tarefa, dentro da pasta de trabalho do bot responsável (tudo fica no ~/ClaudeFlow).
 export function pastaDaTarefa(t) {
@@ -42,21 +45,23 @@ export function criar(dados, { autor = 'usuario' } = {}) {
   if (!squads.has(dados.squad)) throw Object.assign(new Error('squad não encontrado'), { status: 404 });
   const titulo = String(dados.titulo || '').trim().slice(0, 200);
   if (!titulo) throw Object.assign(new Error('dê um título à tarefa'), { status: 400 });
-  const bot = dados.bot && bots.get(dados.bot)?.squad === dados.squad ? dados.bot : null;
-  const t = db.criarTarefa({ ...dados, titulo, bot, criadoPor: autor });
-  db.addEvento(t.id, { autor, tipo: 'criada', texto: bot ? `para @${bots.get(bot).nome}` : '' });
+  const bot = dados.bot === db.KEEPS ? db.KEEPS : dados.bot && bots.get(dados.bot)?.squad === dados.squad ? dados.bot : null;
+  const t = db.criarTarefa({ ...dados, titulo, bot, criadoPor: autor, prazo: quandoOuNada(dados.prazo), inicio: bot && bot !== db.KEEPS ? quandoOuNada(dados.inicio) : null });
+  db.addEvento(t.id, { autor, tipo: 'criada', texto: [bot ? `para ${nomeResponsavel(bot)}` : '', t.inicio ? `começa sozinha em ${new Date(t.inicio).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''].filter(Boolean).join(' · ') });
   avisar(t);
   return t;
 }
 
 // Manda a tarefa para o responsável começar (vira mensagem no chat dele, com tudo o que precisa).
-export function enviar(t, { autor = 'usuario', cadeia = 0 } = {}) {
+export function enviar(t, { autor = 'usuario', cadeia = 0, frente = false } = {}) {
+  if (t.bot === db.KEEPS) throw Object.assign(new Error('esta tarefa é do Keeps (sua): não vai para um bot'), { status: 400 });
   const b = bots.get(t.bot);
   if (!b) throw Object.assign(new Error('escolha o bot responsável antes de enviar'), { status: 400 });
   const origem = autor === 'usuario' ? { tipo: 'usuario' } : { tipo: 'bot', id: autor, nome: bots.get(autor)?.nome };
-  runner.enviar(b.id, { texto: textoDaTarefa(t, autor === 'usuario' ? 'pedida por você' : `repassada por ${nomeAutor(autor)}`), origem, cadeia, tarefa: t.id });
+  runner.enviar(b.id, { texto: textoDaTarefa(t, autor === 'usuario' ? 'pedida por você' : `repassada por ${nomeAutor(autor)}`), origem, cadeia, tarefa: t.id, frente });
   if (t.status === 'afazer') db.atualizarTarefa(t.id, { status: 'fazendo' });
   db.addEvento(t.id, { autor, tipo: 'enviada', texto: `para @${b.nome}` });
+  if (autor !== 'usuario') { try { galaxia.aoRepassar(t, autor); } catch {} }
   avisar(t);
   return db.pegarTarefa(t.id);
 }
@@ -71,6 +76,7 @@ export function mudarStatus(t, status, { autor = 'usuario', nota = '', cadeia = 
   if (antes !== status) db.addEvento(t.id, { autor, tipo: 'status', texto: `${ROTULO[antes]} → ${ROTULO[status]}` });
   if (nota) db.addEvento(t.id, { autor, tipo: 'nota', texto: String(nota).slice(0, 4000) });
   avisar(t);
+  if (antes !== status && ['revisao', 'feito'].includes(status) && autor !== 'usuario') { try { galaxia.aoTerminar(nova, autor, status); } catch {} }
   if (antes !== status && ['revisao', 'feito'].includes(status) && autor !== 'usuario') {
     const pediu = t.criadoPor;
     // quem repassou (outro bot) recebe o resultado e continua o fluxo
@@ -97,12 +103,18 @@ export function editar(t, campos, { autor = 'usuario' } = {}) {
   const ok = {};
   for (const k of ['titulo', 'descricao', 'entregaveis', 'ordem']) if (campos[k] !== undefined) ok[k] = k === 'ordem' ? Number(campos[k]) : String(campos[k]);
   if (campos.bot !== undefined) {
-    const b = campos.bot ? bots.get(campos.bot) : null;
-    if (campos.bot && b?.squad !== t.squad) throw Object.assign(new Error('esse bot não é deste squad'), { status: 400 });
+    const keeps = campos.bot === db.KEEPS;
+    const b = campos.bot && !keeps ? bots.get(campos.bot) : null;
+    if (campos.bot && !keeps && b?.squad !== t.squad) throw Object.assign(new Error('esse bot não é deste squad'), { status: 400 });
     if ((t.bot || null) !== (campos.bot || null)) {
       ok.bot = campos.bot || null;
-      db.addEvento(t.id, { autor, tipo: 'repasse', texto: b ? `responsável: @${b.nome}` : 'sem responsável' });
+      db.addEvento(t.id, { autor, tipo: 'repasse', texto: keeps ? 'responsável: Keeps' : b ? `responsável: @${b.nome}` : 'sem responsável' });
     }
+  }
+  if (campos.prazo !== undefined) ok.prazo = quandoOuNada(campos.prazo);
+  if (campos.inicio !== undefined) {
+    const novo = quandoOuNada(campos.inicio);
+    if (novo !== (t.inicio ?? null)) { ok.inicio = novo; ok.iniciado = null; } // reagendou: o agendador manda de novo na hora nova
   }
   let nova = db.atualizarTarefa(t.id, ok);
   if (campos.status && campos.status !== t.status) nova = mudarStatus(nova, campos.status, { autor });
@@ -111,5 +123,20 @@ export function editar(t, campos, { autor = 'usuario' } = {}) {
 }
 
 export function comoTexto(t) {
-  return `#${t.id} [${ROTULO[t.status]}] ${t.titulo}${t.bot ? ` · @${bots.get(t.bot)?.nome || t.bot}` : ' · sem responsável'}${t.criadoPor ? ` · pedida por ${nomeAutor(t.criadoPor)}` : ''}`;
+  return `#${t.id} [${ROTULO[t.status]}] ${t.titulo}${t.bot ? ` · ${nomeResponsavel(t.bot)}` : ' · sem responsável'}${t.prazo ? ` · prazo ${new Date(t.prazo).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}${t.criadoPor ? ` · pedida por ${nomeAutor(t.criadoPor)}` : ''}`;
+}
+
+// Agendamento: tarefa com "início" marcado vai sozinha para o bot quando chega a hora. Se o bot estiver ocupado, ela
+// entra na fila dele (um trabalho de cada vez) e começa quando a anterior terminar.
+export function iniciarAgendador() {
+  const rodar = () => {
+    for (const t of db.tarefasAgendadasVencidas(Date.now())) {
+      db.atualizarTarefa(t.id, { iniciado: Date.now() });
+      if (!bots.has(t.bot)) { db.addEvento(t.id, { autor: 'usuario', tipo: 'nota', texto: 'Chegou a hora agendada, mas a tarefa está sem bot responsável.' }); avisar(t); continue; }
+      try { enviar(t, { autor: 'usuario' }); db.addEvento(t.id, { autor: 'usuario', tipo: 'nota', texto: 'Começou no horário agendado.' }); }
+      catch (e) { db.addEvento(t.id, { autor: 'usuario', tipo: 'nota', texto: 'Não deu para começar no horário: ' + e.message }); avisar(t); }
+    }
+  };
+  rodar();
+  setInterval(rodar, 30000);
 }

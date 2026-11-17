@@ -1,6 +1,6 @@
 {
   "nome": "Editor",
-  "descricao": "Edição de anúncio e VSL vertical: transcreve, corta, busca B-roll (YouTube Shorts / TikTok / biblioteca) e monta no modelo do Atlas — entrega na timeline para revisar ou já renderizado, tudo na placa de vídeo.",
+  "descricao": "Edição de anúncio e VSL vertical: recebe do Gestor de projetos o corte e o roteiro, busca B-roll (biblioteca estudada pelo Gemini, TikTok pela Apify, YouTube Shorts), monta no modelo do Atlas com legenda e renderiza, tudo na placa de vídeo, e devolve ao Gestor.",
   "avatar": {
     "planeta": "jupiter"
   },
@@ -37,7 +37,7 @@
         "biblioteca + YouTube Shorts + TikTok",
         "só biblioteca"
       ],
-      "padrao": "biblioteca + YouTube Shorts"
+      "padrao": "biblioteca + TikTok"
     },
     {
       "chave": "estilo",
@@ -63,13 +63,13 @@
         "cortar direto (sem aprovação)",
         "o vídeo já vem cortado"
       ],
-      "padrao": "timeline de corte no Atlas para eu aprovar"
+      "padrao": "o vídeo já vem cortado"
     },
     {
       "chave": "densidade",
       "rotulo": "B-rolls por minuto",
       "tipo": "texto",
-      "padrao": "9 a 13 (no máximo 6 s sem B-roll)"
+      "padrao": "distribuída para segurar a retenção: nem exagero, nem pouco (referência 9 a 13 por minuto)"
     },
     {
       "chave": "sfx",
@@ -86,7 +86,7 @@
       "chave": "legenda",
       "rotulo": "Legenda",
       "tipo": "texto",
-      "padrao": "logo abaixo do pescoço; no meio da tela na dividida e no canto"
+      "padrao": "na altura do peito; no meio da tela na dividida e no canto"
     },
     {
       "chave": "entrega",
@@ -96,7 +96,7 @@
         "timeline do Atlas para eu revisar (sem render)",
         "render final pronto (.mp4)"
       ],
-      "padrao": "timeline do Atlas para eu revisar (sem render)"
+      "padrao": "render final pronto (.mp4)"
     },
     {
       "chave": "estudoGemini",
@@ -109,5 +109,34 @@
       "padrao": "estudar só os clipes novos"
     }
   ],
-  "pesado": true
+  "pesado": true,
+  "demandas": [
+    {
+      "nome": "Edição de anúncio",
+      "descricao": "Do corte ao render final, com um cartão só para aprovar cada passo.",
+      "instrucao": "Siga o perfect-edit e as regras do squad. Cada etapa vai para o cartão da demanda com demanda_etapa; nada de vários OKs soltos no chat.",
+      "etapas": [
+        {
+          "nome": "Material",
+          "instrucao": "Confira o que veio (bruto ou corte, roteiro, instruções, links) e mostre no cartão um resumo curto: duração, modelo de edição, se precisa cortar e o plano em 3 a 5 linhas. Se faltar algo essencial, peça no texto do cartão."
+        },
+        {
+          "nome": "Corte",
+          "instrucao": "Se o vídeo precisa de corte: faça (timeline de corte no Atlas ou corte direto, conforme a preferência) e ponha o link/prévia no cartão. Se já veio cortado, marque como pulada."
+        },
+        {
+          "nome": "B-rolls",
+          "instrucao": "Escolha os B-rolls (biblioteca primeiro, depois as fontes da preferência). No cartão: os B-rolls como itens (prévia ou folha), cada um com o trecho da fala onde entra."
+        },
+        {
+          "nome": "Edição no Atlas",
+          "instrucao": "Monte no Atlas e ponha no cartão o link da timeline (mcp__flow__atlas_ligar antes) e as folhas de conferência. Ajuste o que ele pedir."
+        },
+        {
+          "nome": "Render final",
+          "instrucao": "Renderize, confira nas folhas e ponha o .mp4 final como item no cartão (duração, quantos B-rolls e o que ficou fora do padrão no texto). Se veio do Gestor, devolva a tarefa a ele depois da aprovação."
+        }
+      ]
+    }
+  ]
 }

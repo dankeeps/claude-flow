@@ -6,6 +6,7 @@ import { squads, botsDoSquad, dirBot } from './store.js';
 import { template, dirTemplate } from './templates.js';
 import * as mem from './memoria.js';
 import * as recursos from './recursos.js';
+import * as cerebro from './cerebro.js';
 
 const vazio = (s, alt) => (s && s.trim() ? s.trim() : alt);
 
@@ -63,11 +64,14 @@ ${links.length ? links.map((l) => `- ${l.nome}: ${l.url}${l.nota ? ` (${l.nota})
 ## Seus modelos de referência
 ${modelos.length ? modelos.map((m) => `- ${m.nome}: ${m.arquivo}`).join('\n') + '\nAntes de fazer algo que tem modelo (ex.: um anúncio), leia o arquivo do modelo e siga.' : '(nenhum; quando o usuário pedir para guardar um padrão, use mcp__flow__modelo_salvar)'}
 
+## Cérebro do Claude Flow
+${(() => { try { return cerebro.textoParaBot(bot); } catch { return '(indisponível)'; } })()}
+
 ## Últimas sessões (resumos)
 ${resumos.length ? resumos.join('\n\n---\n\n') : '(esta é a primeira sessão)'}
 
 ## Conectores do seu squad
-${conectores.length ? conectores.map((c) => `- ${c.nome}${c.prefixo ? ` (ferramentas ${c.prefixo}__*)` : ''}: ${c.descricao}${c.campos?.EMAIL ? ` Conta: ${c.campos.EMAIL}.` : ''}`).join('\n') : '(nenhum)'}
+${conectores.length ? conectores.map((c) => `- ${c.nome}${c.prefixo ? ` (ferramentas ${c.prefixo}__*)` : ''}: ${c.descricao}${c.instrucao ? ` ${c.instrucao}` : ''}${c.campos?.EMAIL ? ` Conta: ${c.campos.EMAIL}.` : ''}`).join('\n') : '(nenhum)'}
 Quando houver mais de uma conta do mesmo serviço, use as ferramentas da conta certa (pelo nome/prefixo); se não souber qual, pergunte.
 ${avisos.length ? '\nAvisos: ' + avisos.join(' ') : ''}
 
@@ -91,6 +95,7 @@ ${avisos.length ? '\nAvisos: ' + avisos.join(' ') : ''}
 - Se as ferramentas de um conector ligado não aparecerem, use ToolSearch com o nome dele (o conector pode ainda estar conectando).
 - Tarefas: o squad tem um kanban (A fazer, Fazendo, Revisão, Feito). Trabalho que leva mais de uma mensagem vira tarefa (mcp__flow__tarefa_criar sem "para"); ao terminar, tarefa_atualizar com status "revisao" (o usuário confere) ou "feito" e uma nota do que entregou e onde. Veja as suas com tarefas_listar.
 - Repassar trabalho para outro bot do squad: mcp__flow__tarefa_criar com para=<bot>, com objetivo, contexto (caminhos de arquivo, decisões, links) e "pronto quando". O resultado volta para você quando ele terminar. Partes independentes podem ir para bots diferentes ao mesmo tempo; depois use tarefas_aguardar com os ids. Use bot_enviar só para perguntas rápidas.
+- Google Drive: para achar uma pasta ou arquivo pelo link/ID (nome, onde fica, o que tem dentro), use o app do Google Drive da conta do ChatGPT (ferramentas google_drive) ou o Drive do PC (G:\Meu Drive, sincronizado: subir = copiar para a pasta). Nunca abra o Drive no navegador (cai na tela de login) e nunca peça login do Drive ao usuário.
 - Baixar do Google Drive (link de pasta ou de arquivo): use sempre a skill baixar-do-drive — curl direto no endereço de download do Google (drive.usercontent.google.com, confirm=t), todos os arquivos ao mesmo tempo. Nunca baixe vídeo pelo download do conector do Drive (ele devolve base64 e não aguenta arquivo grande).
 - Pasta: tudo o que você gerar, baixar ou editar fica dentro da sua pasta de trabalho (${trabalho}); trabalho de uma tarefa, na pasta da tarefa. Nada em Downloads, Área de Trabalho ou pastas soltas. Cache e temporários já vão para ~/ClaudeFlow/cache sozinhos.
 - Trabalho pesado (render, transcrição, edição de vídeo, download grande): um de cada vez, nunca vários em paralelo nem em segundo plano ao mesmo tempo.

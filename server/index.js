@@ -12,14 +12,23 @@ import * as nav from './navegador.js';
 import * as atlas from './atlas.js';
 import * as interno from './interno.js';
 import { abrirSSE, emitir, marcarPresenca, inscreverPush, chavePublicaPush, notificar } from './eventos.js';
-import { listarTemplates, criarBot, skillsDoBot, catalogoSkills, ligarSkill, ligarHabilidades, skillsComDescricao } from './templates.js';
+import { listarTemplates, template as templateDe, criarBot, skillsDoBot, catalogoSkills, ligarSkill, ligarHabilidades, skillsComDescricao } from './templates.js';
 import { statusConectores, atualizarStatusClaude, criarConta, renomearConta, removerConta, gravarCampos, idValido } from './conectores.js';
 import { iniciarAgenda } from './agenda.js';
 import * as tarefas from './tarefas.js';
 import * as recursos from './recursos.js';
 import * as rotinas from './rotinas.js';
+import * as demandas from './demandas.js';
 import * as sala from './sala.js';
 import * as galeria from './galeria.js';
+import * as codex from './codex.js';
+import * as cerebro from './cerebro.js';
+import * as sd from './squaddados.js';
+import * as head from './head.js';
+import * as ditado from './ditado.js';
+import * as voz from './voz.js';
+import * as grok from './grok.js';
+import * as voicestudio from './voicestudio.js';
 
 store.carregar();
 // código novo pode ter mudado as regras do começo de sessão: cada bot remonta a dele na próxima mensagem
@@ -62,7 +71,8 @@ runner.ganchos.turnoLongo = (bot, item) => {
   runner.salvarFilas(); // o vínculo com o cartão sobrevive a um reinício
   emitir('tarefa', { squad: t.squad, id: t.id });
 };
-runner.ganchos.fimDoTurno = (bot, item, { final, erro, parado }) => {
+runner.ganchos.fimDoTurno = (bot, item, { final, erro, parado, dur }) => {
+  try { head.aoFimDoTurno(bot, item, { final, erro, parado, duracao: dur || 0 }); } catch (e) { console.error('[head]', e.message); }
   if (!item.tarefaAuto) return;
   const t = db.pegarTarefa(item.tarefaAuto);
   if (!t || t.status !== 'fazendo') return; // o bot já moveu o cartão sozinho
@@ -180,8 +190,10 @@ async function estadoGeral() {
     aprovacoes: [...interno.aprovacoes.values()],
     limite: runner.limiteUso,
     atlas: { url: config.atlas.url, urlPublica: config.atlas.urlPublica, noAr: await atlas.noAr(), instalado: atlas.onde().instalado },
+    demandas: demandas.ativas(),
+    voicestudio: { noAr: await voicestudio.noAr(), instalado: voicestudio.onde().instalado, pasta: voicestudio.PASTA },
     config: {
-      modeloPadrao: config.modeloPadrao, urlPublica: config.urlPublica, memoria: config.memoria, squad: config.squad,
+      modeloPadrao: config.modeloPadrao, motor: config.motor || 'claude', urlPublica: config.urlPublica, memoria: config.memoria, squad: config.squad,
       home: HOME,
     },
   };
@@ -261,6 +273,7 @@ rota('POST', '/api/bots', async ({ corpo }) => {
   pegarSquad(corpo.squad);
   if (!corpo.nome?.trim()) throw Object.assign(new Error('dê um nome ao bot'), { status: 400 });
   const bot = criarBot(corpo);
+  try { demandas.garantirDoTemplate(bot, templateDe(bot.template)); } catch (e) { console.error('[demandas]', e.message); }
   store.garantirConectoresNoSquad(bot.squad, bot.conectores); // o que o template precisa passa a valer no squad
   sujarSquad(bot.squad);
   emitir('estado', {});
@@ -268,7 +281,10 @@ rota('POST', '/api/bots', async ({ corpo }) => {
 });
 rota('PATCH', '/api/bots/:id', async ({ p, corpo }) => {
   const bot = pegarBot(p.id);
-  const campos = ['nome', 'modelo', 'esforco', 'autonomia', 'pesado', 'conectores', 'navegador', 'pastas', 'prefs', 'env'];
+  const campos = ['nome', 'modelo', 'esforco', 'autonomia', 'pesado', 'conectores', 'navegador', 'pastas', 'prefs', 'env', 'cerebro', 'motor'];
+  if (corpo.motor !== undefined && !['claude', 'codex', 'grok', ''].includes(corpo.motor)) throw Object.assign(new Error('motor: claude, codex ou grok'), { status: 400 });
+  // trocou de motor: a sessão de um não serve no outro (a memória, a função e os resumos continuam)
+  if (corpo.motor !== undefined && (corpo.motor || null) !== (bot.motor || null)) { bot.sessao = null; bot.ctxTokens = 0; bot.sessaoTurnos = 0; bot.codexInstrucoes = null; bot.grokInstrucoes = null; }
   for (const c of campos) if (corpo[c] !== undefined) bot[c] = corpo[c];
   if (corpo.avatar !== undefined) bot.avatar = store.limparAvatar(corpo.avatar);
   if (typeof bot.nome === 'string') bot.nome = bot.nome.trim().slice(0, 40) || 'Bot';
@@ -327,7 +343,7 @@ rota('GET', '/api/bots/:id/contexto', async ({ p }) => {
   const bot = pegarBot(p.id);
   const { base, turnos } = db.contextoDaSessao(bot.id, bot.sessao);
   return {
-    usado: bot.ctxTokens || 0, maximo: config.memoria.contextoMax, compactarEm: config.memoria.compactarEm, compactarDias: config.memoria.compactarDias,
+    usado: bot.ctxTokens || 0, maximo: bot.ctxMax || config.memoria.contextoMax, compactarEm: config.memoria.compactarEm, compactarDias: config.memoria.compactarDias,
     base: Math.min(base, bot.ctxTokens || 0), turnos, inicio: bot.sessao ? bot.sessaoInicio || null : null, sessao: !!bot.sessao,
     resumos: mem.ultimosResumos(bot).length, ocupado: runner.ocupado(bot.id),
   };
@@ -344,10 +360,28 @@ const pegarRotina = (id) => {
   return r;
 };
 const comLink = (r) => ({ ...r, link: `${config.urlPublica || `http://127.0.0.1:${config.porta}`}/api/gatilho/${r.gatilho}` });
+// todas as rotinas de um squad (ou de todos), para a aba Rotinas
+rota('GET', '/api/rotinas', async ({ q }) => { const sq = q.get('squad'); return rotinas.listar().filter((r) => !sq || store.bots.get(r.bot)?.squad === sq).map(comLink); });
 rota('POST', '/api/rotinas', async ({ corpo }) => { pegarBot(corpo.bot); return comLink(rotinas.criar(corpo)); });
 rota('GET', '/api/rotinas/:id', async ({ p }) => comLink({ ...pegarRotina(p.id), descricao: rotinas.descrever(pegarRotina(p.id).quando) }));
 rota('PATCH', '/api/rotinas/:id', async ({ p, corpo }) => { pegarRotina(p.id); return comLink(rotinas.editar(p.id, corpo || {})); });
 rota('POST', '/api/rotinas/:id/rodar', async ({ p }) => { pegarRotina(p.id); return rotinas.disparar(p.id, { origem: 'manual' }); });
+// demandas (modelos no squad + execuções)
+const pegarModeloDem = (id) => { const m = demandas.pegarModelo(id); if (!m) throw Object.assign(new Error('demanda não encontrada'), { status: 404 }); return m; };
+rota('GET', '/api/demandas', async ({ q }) => ({ modelos: demandas.listarModelos(q.get('squad')), execucoes: demandas.listarExecucoes({ squad: q.get('squad'), bot: q.get('bot') }) }));
+rota('POST', '/api/demandas', async ({ corpo }) => { pegarBot(corpo.bot); return demandas.criarModelo(corpo); });
+rota('PATCH', '/api/demandas/:id', async ({ p, corpo }) => { pegarModeloDem(p.id); return demandas.editarModelo(p.id, corpo || {}); });
+rota('DELETE', '/api/demandas/:id', async ({ p }) => { pegarModeloDem(p.id); demandas.removerModelo(p.id); return { ok: true }; });
+rota('POST', '/api/demandas/:id/iniciar', async ({ p, corpo }) => {
+  pegarModeloDem(p.id);
+  const anexos = (corpo.anexos || []).map((t) => interno.arquivoPorToken(t)).filter(Boolean).map((a) => ({ caminho: a.caminho, nome: a.nome, tamanho: a.tamanho }));
+  return demandas.iniciar(p.id, { bot: corpo.bot, titulo: corpo.titulo, texto: String(corpo.texto || ''), anexos });
+});
+rota('GET', '/api/execucoes/:id', async ({ p }) => { const x = demandas.pegarExecucao(p.id); if (!x) throw Object.assign(new Error('demanda não encontrada'), { status: 404 }); return x; });
+rota('POST', '/api/execucoes/:id/aprovar', async ({ p }) => demandas.aprovar(p.id));
+rota('POST', '/api/execucoes/:id/ajuste', async ({ p, corpo }) => demandas.ajuste(p.id, corpo.texto));
+rota('POST', '/api/execucoes/:id/reabrir', async ({ p, corpo }) => demandas.reabrir(p.id, corpo.etapa, corpo.texto));
+rota('POST', '/api/execucoes/:id/encerrar', async ({ p }) => demandas.encerrar(p.id));
 rota('DELETE', '/api/rotinas/:id', async ({ p }) => { pegarRotina(p.id); rotinas.remover(p.id); return { ok: true }; });
 
 // sala do squad: o usuário escreve e a mensagem vai para quem deve responder
@@ -395,13 +429,23 @@ const pegarTarefa = (id) => {
   if (!t) throw Object.assign(new Error('tarefa não encontrada'), { status: 404 });
   return t;
 };
+// aba Spy: bibliotecas monitoradas e blacklist
+rota('GET', '/api/squads/:id/spy', async ({ p }) => { pegarSquad(p.id); return sd.spy(p.id); });
+rota('PATCH', '/api/squads/:id/spy/monitoradas/:pid', async ({ p, corpo }) => { pegarSquad(p.id); const m = sd.alterarMonitorada(p.id, p.pid, corpo || {}); emitir('spy', { squad: p.id }); return m; });
+rota('DELETE', '/api/squads/:id/spy/monitoradas/:pid', async ({ p }) => { pegarSquad(p.id); sd.removerMonitorada(p.id, p.pid); emitir('spy', { squad: p.id }); return { ok: true }; });
+rota('POST', '/api/squads/:id/spy/blacklist', async ({ p, corpo }) => { pegarSquad(p.id); sd.blacklistAdicionar(p.id, corpo || {}); emitir('spy', { squad: p.id }); return sd.spy(p.id); });
+rota('DELETE', '/api/squads/:id/spy/blacklist/:pid', async ({ p }) => { pegarSquad(p.id); sd.blacklistRemover(p.id, decodeURIComponent(p.pid)); emitir('spy', { squad: p.id }); return { ok: true }; });
+// itens relevantes da sala
+rota('GET', '/api/squads/:id/relevantes', async ({ p }) => { pegarSquad(p.id); return { itens: sd.relevantes(p.id) }; });
+rota('PATCH', '/api/squads/:id/relevantes/:item', async ({ p, corpo }) => { pegarSquad(p.id); const it = sd.relevanteAlterar(p.id, p.item, corpo || {}); emitir('relevante', { squad: p.id, id: it.id }); return it; });
 rota('GET', '/api/squads/:id/tarefas', async ({ p }) => {
   const sq = pegarSquad(p.id);
   return { tarefas: db.tarefasDoSquad(sq.id), notas: db.contarEventos(sq.id) };
 });
 rota('POST', '/api/tarefas', async ({ corpo }) => {
   let t = tarefas.criar(corpo || {}, { autor: 'usuario' });
-  if (corpo?.enviar && t.bot) t = tarefas.enviar(t, { autor: 'usuario' });
+  // começar agora (início imediato); com início agendado quem manda é o agendador; tarefa do Keeps não vai para bot
+  if (corpo?.enviar && t.bot && t.bot !== db.KEEPS && !t.inicio) t = tarefas.enviar(t, { autor: 'usuario' });
   return t;
 });
 rota('GET', '/api/tarefas/:id', async ({ p }) => {
@@ -416,6 +460,29 @@ rota('DELETE', '/api/tarefas/:id', async ({ p }) => {
   db.apagarTarefa(t.id);
   emitir('tarefa', { squad: t.squad, id: t.id, apagada: true });
   return { ok: true };
+});
+
+// Modelos do seletor: os do ChatGPT (lidos da conta pelo Codex) ou os do Claude.
+const MODELOS_CLAUDE = [
+  { id: 'fable', nome: 'Fable 5.1', descricao: 'O mais capaz, para o trabalho mais difícil' },
+  { id: 'opus', nome: 'Opus 5.5', descricao: 'Raciocínio forte para trabalho complexo' },
+  { id: 'sonnet', nome: 'Sonnet 5.5', descricao: 'Equilíbrio entre qualidade e velocidade' },
+  { id: 'haiku', nome: 'Haiku 5.5', descricao: 'O mais rápido, para tarefas simples' },
+].map((m) => ({ ...m, esforcos: ['low', 'medium', 'high', 'xhigh', 'max'] }));
+// cérebro: itens (modelos, biblioteca, agentes) e o texto de um item
+rota('GET', '/api/cerebro', async () => ({ pasta: cerebro.DIR, itens: cerebro.listar() }));
+rota('GET', '/api/cerebro/item', async ({ q }) => cerebro.ler(q.get('caminho') || ''));
+rota('GET', '/api/modelos', async () => {
+  if ((config.motor || 'claude') !== 'codex') return { motor: 'claude', modelos: MODELOS_CLAUDE };
+  const b = [...store.bots.values()][0];
+  if (!b) return { motor: 'codex', modelos: codex.modelosEmCache() || [] };
+  return { motor: 'codex', modelos: await codex.modelos(b, runner.envDoTurno(b)) };
+});
+rota('GET', '/api/modelos/grok', async () => ({ motor: 'grok', instalado: grok.instalado(), logado: grok.logado(), modelos: await grok.modelos() }));
+rota('GET', '/api/conta-chatgpt', async () => {
+  const b = [...store.bots.values()][0];
+  if (!b) return { conta: null, apps: [] };
+  return codex.conta(b, runner.envDoTurno(b));
 });
 
 rota('GET', '/api/bots/:id/galeria', async ({ p }) => ({ itens: galeria.listar(pegarBot(p.id)) }));
@@ -469,7 +536,7 @@ rota('PUT', '/api/usuario', async ({ corpo }) => {
   return { ok: true };
 });
 rota('PATCH', '/api/config', async ({ corpo }) => {
-  const permitido = ['modeloPadrao', 'urlPublica', 'memoria', 'squad', 'atlas', 'navegador', 'push', 'hostsPermitidos', 'claudeBin'];
+  const permitido = ['motor', 'modeloPadrao', 'urlPublica', 'memoria', 'squad', 'atlas', 'navegador', 'push', 'hostsPermitidos', 'claudeBin'];
   const parcial = Object.fromEntries(Object.entries(corpo).filter(([k]) => permitido.includes(k)));
   atualizarConfig(parcial);
   return { ok: true };
@@ -537,6 +604,14 @@ rota('POST', '/api/navegador/:perfil/fechar', async ({ p }) => {
 
 // Atlas
 rota('POST', '/api/atlas/ligar', async () => atlas.ligar());
+rota('POST', '/api/voicestudio/ligar', async () => voicestudio.ligar());
+
+// conversa ao vivo por voz (voz.js)
+rota('GET', '/api/voz', async () => voz.estado());
+rota('PUT', '/api/voz/chave', async ({ corpo }) => voz.salvarChave(corpo.chave));
+rota('POST', '/api/voz/:id/chamada', async ({ p, corpo }) => voz.chamada(pegarBot(p.id), corpo.sdp));
+rota('POST', '/api/voz/:id/pedir', async ({ p, corpo }) => voz.pedir(pegarBot(p.id), corpo.pedido));
+rota('POST', '/api/voz/:id/fim', async ({ p, corpo }) => voz.encerrar(pegarBot(p.id), corpo || {}));
 
 // aprovações
 rota('POST', '/api/aprovacoes/:id', async ({ p, corpo }) => ({ ok: interno.decidirAprovacao(p.id, !!corpo.permitir) }));
@@ -598,6 +673,7 @@ async function tratar(req, res) {
     if (!origemOk(req)) return json(res, 403, { erro: 'origem não permitida' });
 
     if (req.method === 'PUT' && url.pathname === '/api/upload') return receberUpload(req, res, url);
+    if (req.method === 'PUT' && url.pathname === '/api/ditado') return json(res, 200, await ditado.receber(req));
 
     for (const r of rotas) {
       if (r.metodo !== req.method) continue;
@@ -646,6 +722,9 @@ servidor.listen(config.porta, config.host, () => {
   if (config.host !== '127.0.0.1') console.log('ATENÇÃO: o servidor está aberto para a rede (host no config.json).');
   iniciarAgenda();
   rotinas.iniciarRotinas();
+  try { demandas.iniciarDemandas(templateDe); } catch (e) { console.error('[demandas]', e.message); }
+  tarefas.iniciarAgendador();
+  head.iniciar();
   // a fila e o trabalho interrompido (queda de energia, reinício) voltam de onde pararam
   setTimeout(() => runner.restaurarFilas(), 1500);
 });

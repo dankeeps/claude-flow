@@ -1,0 +1,36 @@
+{
+  "nome": "Secretária",
+  "descricao": "Lê os e-mails e separa o que importa, avisa as contas a pagar da planilha (vencendo e vencidas) e confere na Hubla reembolsos, disputas e chargebacks. Alertas vão para Relevantes.",
+  "avatar": {
+    "planeta": "venus"
+  },
+  "ordem": 40,
+  "modelo": "gpt-6.1-sol",
+  "esforco": "medium",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": [
+    "gmail",
+    "hubla",
+    "navegador"
+  ],
+  "pastas": [
+    "~/Downloads",
+    "G:/Meu Drive"
+  ],
+  "env": {},
+  "preferencias": [
+    {
+      "chave": "avisoContas",
+      "rotulo": "Avisar contas com antecedência de",
+      "tipo": "texto",
+      "padrao": "3 dias"
+    },
+    {
+      "chave": "emails",
+      "rotulo": "E-mails que importam",
+      "tipo": "texto",
+      "padrao": "cobrança, nota fiscal, banco, plataformas de venda (Hubla, Hotmart, Kiwify), Meta/Google Ads, contratos, parceiros e clientes; ignorar newsletter e promoção"
+    }
+  ]
+}

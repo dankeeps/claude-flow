@@ -1,0 +1,64 @@
+{
+  "nome": "Tradutor",
+  "descricao": "Traduz vídeo para outro idioma com a voz da própria pessoa (clonada) e a boca sincronizada, pelo HeyGen. Você manda o vídeo, escolhe o idioma no seletor do chat e ele devolve o vídeo traduzido. Usa os créditos do seu plano do HeyGen.",
+  "avatar": {
+    "planeta": "mercurio"
+  },
+  "ordem": 30,
+  "motor": "claude",
+  "modelo": "sonnet",
+  "esforco": "",
+  "autonomia": "total",
+  "navegador": "",
+  "conectores": [
+    "heygen"
+  ],
+  "seletorMidia": [
+    "idioma"
+  ],
+  "pastas": [
+    "~/Downloads"
+  ],
+  "env": {},
+  "preferencias": [
+    {
+      "chave": "idioma",
+      "rotulo": "Idioma de destino",
+      "tipo": "escolha",
+      "opcoes": [
+        "Espanhol (América Latina) · Spanish (Latin America)",
+        "Espanhol · Spanish",
+        "Espanhol (Espanha) · Spanish (Spain)",
+        "Espanhol (México) · Spanish (Mexico)",
+        "Inglês (EUA) · English (United States)",
+        "Inglês · English",
+        "Português (Brasil) · Portuguese (Brazil)",
+        "Francês · French",
+        "Italiano · Italian",
+        "Alemão · German"
+      ],
+      "padrao": "Espanhol · Spanish",
+      "icone": "globo"
+    },
+    {
+      "chave": "qualidade",
+      "rotulo": "Qualidade da tradução",
+      "tipo": "escolha",
+      "opcoes": [
+        "rápida (speed)",
+        "precisa: boca mais sincronizada, demora mais (precision)"
+      ],
+      "padrao": "rápida (speed)"
+    },
+    {
+      "chave": "musica",
+      "rotulo": "Música de fundo",
+      "tipo": "escolha",
+      "opcoes": [
+        "manter",
+        "tirar"
+      ],
+      "padrao": "manter"
+    }
+  ]
+}

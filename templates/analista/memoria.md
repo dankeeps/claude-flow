@@ -1,0 +1,2 @@
+- Métricas do Meta vêm do app do Facebook conectado no ChatGPT; as da VSL, da skill vturb (chave em Conectores → VTurb).
+- Relatório sai em Relevantes (mcp__flow__relevante_criar), no formato fixo do template.

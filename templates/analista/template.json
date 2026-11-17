@@ -1,0 +1,41 @@
+{
+  "nome": "Analista de dados",
+  "descricao": "Relatório de criativos cruzando Meta Ads (CPA, CPC, CPM, IC, hook rate, hold rate, conversões de checkout e de página) com a VTurb (retenção no 1º minuto, no pitch, conversão), e relatório das bibliotecas monitoradas da aba Spy. Publica em Relevantes.",
+  "avatar": {
+    "planeta": "marte"
+  },
+  "ordem": 30,
+  "modelo": "gpt-6.1-sol",
+  "esforco": "medium",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": [
+    "facebook-chatgpt",
+    "vturb",
+    "meta-ads"
+  ],
+  "pastas": [
+    "~/Downloads"
+  ],
+  "env": {},
+  "preferencias": [
+    {
+      "chave": "janela",
+      "rotulo": "Janela do relatório de criativos",
+      "tipo": "texto",
+      "padrao": "primeiros 3 dias de cada anúncio"
+    },
+    {
+      "chave": "metaCpa",
+      "rotulo": "CPA alvo (R$)",
+      "tipo": "texto",
+      "padrao": ""
+    },
+    {
+      "chave": "contaAnuncios",
+      "rotulo": "Conta de anúncios (Meta)",
+      "tipo": "texto",
+      "padrao": ""
+    }
+  ]
+}

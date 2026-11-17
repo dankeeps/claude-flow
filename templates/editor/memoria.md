@@ -2,7 +2,7 @@
 - Tela cheia e canto: só B-roll vertical (Shorts/TikTok). Tela dividida aceita horizontal.
 - Biblioteca de B-roll primeiro; clipe usado em outro anúncio não volta; B-roll solto do computador só de pasta que o Daniel indicar.
 - B-roll gringo (termos em inglês, criadores dos EUA), com "aesthetic / raw / no text / cinematic" nos termos.
-- Legenda logo abaixo do pescoço do expert; no meio da tela na dividida e no canto.
+- Legenda na altura do peito; no meio da tela na dividida e no canto. Sem B-roll em diálogo entre duas pessoas.
 - VSL sem música. Prévia tem que ser igual ao vídeo final.
 - Corte: zero pausa entre palavras, um arquivo por anúncio, na ordem do roteiro, resolução original quando o corte é a entrega (cortar.py --hd só quando segue para o Atlas).
 - Depois que o Daniel mexeu na timeline do Atlas, nunca rodar `plano --forcar` (apaga o que ele fez).

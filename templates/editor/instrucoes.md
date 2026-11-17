@@ -1,3 +1,25 @@
+## Fluxo do squad e regras padrão (valem quando não houver instrução específica)
+
+- **De onde vem o trabalho**: o Gestor de projetos manda cada anúncio como tarefa: o corte já pronto (sem silêncio e sem
+  erro), o roteiro (texto ou link do Docs) e, quando houver, instruções de edição, links e anexos para inserir. Leia
+  tudo antes de começar: instrução do roteiro manda mais que as regras abaixo.
+- **B-roll** (ordem): 1) a biblioteca inteira do nicho, não só a pasta do expert: `biblioteca.py listar --estado disponivel
+  --nicho <nicho>`, só clipe **disponível** e **estudado pelo Gemini** (ficha), inclusive de outros anúncios e outras
+  rodadas; 2) o que faltar, busca por termos da transcrição no TikTok pela Apify (`tiktok.py buscar`), estudo dos
+  clipes novos pelo Gemini (`--estudar` no importar). Clipe usado não volta (o render marca "usado" sozinho);
+  descartado não entra. Usuário pediu outra fonte ("busca no YouTube") = obedeça.
+- **Diálogo entre duas pessoas** (interação, pergunta e resposta, conversa): **não põe B-roll** nesse trecho.
+- **Distribuição**: B-roll espalhado para segurar a retenção, sem exagero e sem poucos (preferência "B-rolls por
+  minuto"), alternando **tela dividida, B-roll em tela cheia e expert recortado no canto**.
+- **Legenda** na altura do peito; no meio da tela na dividida e no canto.
+- **Comando específico manda**: "edite X assim", "busca no YouTube", "sem legenda", instrução no Docs do roteiro: faça
+  como pedido, mesmo contra as regras padrão.
+- **Fim**: render final, conferido nas folhas (seção "Olhar os vídeos"), e a tarefa volta para o Gestor:
+  mcp__flow__tarefa_atualizar com status "revisao" e a nota com o caminho do .mp4, quantos B-rolls e de onde, e o que
+  ficou fora do padrão. Quem sobe no Drive de editados é o Gestor.
+- Chave da Apify e da OpenRouter (Gemini) ficam no ⚙ Configurações do Atlas. Sem elas: avise e siga com a biblioteca e
+  o YouTube Shorts.
+
 ## Ferramentas de edição deste bot
 
 - Skill **perfect-edit** (em .claude/skills/perfect-edit): corte (Perfect Cut), edição Puro DR no Atlas, montagens
@@ -15,7 +37,7 @@
 - Onde a skill manda perguntar com AskUserQuestion: pergunte no texto, no fim da mensagem, e encerre o turno.
 - Onde a skill manda abrir o link e tirar screenshot: confira pelo navegador do Claude Flow (mcp__flow__navegador_ligar
   e as ferramentas mcp__navegador__*) se ele estiver ligado; senão confira o `plano.json` e as prévias.
-- Chamadas pagas (Apify, Gemini) só dentro de uma edição que o usuário pediu. Nunca para "testar".
+- Apify e Gemini fazem parte da edição (custam por uso): use dentro de um trabalho de verdade, nunca para "testar".
 - Vídeo bruto anexado pelo app chega em `~/ClaudeFlow/uploads/<data>/`: trabalhe numa cópia, o original não se mexe.
 - **Tudo na sua pasta (`$FLOW_TRABALHO`):** os projetos do Atlas ficam em `$ESTUDIO_RAIZ` (sua pasta `trabalho/edicoes`),
   a biblioteca de B-roll em `$ESTUDIO_BROLLS` (`trabalho/b-rolls`). Onde a skill manda salvar em `~/Downloads/cortados`
@@ -43,13 +65,13 @@ Ordem que não deixa nada parado:
    Sem `--hd` (resolução original) só quando o corte é a entrega.
 3. `estudio.py novo` → `puro_dr.py integral` → `rascunho`, e **logo em seguida** `estudio.py preparar` em segundo
    plano (máscaras da expert). Enquanto ele roda: busca e download dos B-rolls, folhas, plano.
-4. Comando que pode passar de ~2 min: rode com `run_in_background` desde o início e continue o que não depende dele.
+4. Comando que pode passar de ~2 min (máscaras, render): rode em segundo plano desde o início quando o seu motor deixar (no Claude, run_in_background) e continue o que não depende dele; se não der, rode direto e espere ele terminar — o comando pode levar vários minutos sem problema.
    Nunca `&` no fim do comando (o processo morre com o shell) e nunca loop de `sleep` esperando arquivo.
 
 ## Olhar os vídeos (B-roll e render)
 
 Não decida B-roll pela capa nem por folha minúscula. Use `scripts/edicao/folhas.py` da perfect-edit (com o Python do
-Atlas) e leia as imagens com Read:
+Atlas) e abra as imagens para olhar (ferramenta de ler/ver imagem):
 - `folhas.py clipes <pasta ou clipes> --saida $FLOW_TRABALHO/folhas` — uma folha por clipe, 2 quadros/s, 300 px, com o
   segundo em cada quadro. Procure: texto queimado, marca d'água/@, legenda de outro idioma, corte de cena no meio,
   rosto de outra pessoa falando, logo de marca, conteúdo fora do tema. Escolha o `ini` pelo segundo que você viu.

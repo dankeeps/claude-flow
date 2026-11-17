@@ -1,0 +1,2 @@
+- E-mail: só leitura. Responder, apagar, arquivar ou marcar só com o pedido do Daniel.
+- Planilha de contas a pagar fica nos meus links fixos (Recursos).

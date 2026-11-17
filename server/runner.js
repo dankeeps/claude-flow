@@ -15,6 +15,13 @@ import * as mem from './memoria.js';
 import { emitir, notificar, alguemVendo } from './eventos.js';
 import { montarMcp } from './conectores.js';
 import { montarSnapshot } from './prompt.js';
+import * as galaxia from './galaxia.js';
+import * as codex from './codex.js';
+import * as grok from './grok.js';
+import * as voicestudio from './voicestudio.js';
+import { template as templateDe } from './templates.js';
+import * as demandas from './demandas.js';
+import { conectoresDoBot } from './store.js';
 
 const filas = new Map(); // bot -> [itens]
 const ativos = new Map(); // bot -> { child, turno, item, inicio, sessao, parado }
@@ -37,7 +44,7 @@ export function salvarFilas() {
     for (const id of new Set([...filas.keys(), ...ativos.keys()])) {
       const a = ativos.get(id);
       const fila = (filas.get(id) || []).map(serial);
-      if (fila.length || a) dados[id] = { fila, ativo: a ? { item: serial(a.item), pid: a.child?.pid || null } : null };
+      if (fila.length || a) dados[id] = { fila, ativo: a ? { item: serial(a.item), pid: a.child?.pid || codex.pidDoBot(id) || null } : null };
     }
     try {
       fs.writeFileSync(`${ARQ_FILA}.tmp`, JSON.stringify(dados));
@@ -52,10 +59,10 @@ function matarOrfao(pid) {
   try {
     if (IS_WIN) {
       const r = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
-      if (/claude/i.test(r.stdout || '')) spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
+      if (/claude|codex/i.test(r.stdout || '')) spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
     } else {
       const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
-      if (/claude/i.test(cmd)) process.kill(pid, 'SIGTERM');
+      if (/claude|codex/i.test(cmd)) process.kill(pid, 'SIGTERM');
     }
   } catch {}
 }
@@ -117,7 +124,7 @@ export function pausar(botId, pausado = true) {
   salvarBot(bot);
   emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'sistema', texto: pausado ? 'Fila pausada: o que está rodando termina, e as próximas mensagens esperam você retomar.' : 'Fila retomada.' }));
   avisarEstado(bot);
-  if (!pausado) setImmediate(() => proximo(bot.id));
+  if (!pausado) { if (limiteAte) { limiteAte = 0; avisadosLimite.clear(); } setImmediate(() => proximo(bot.id)); }
   return estadoBot(bot);
 }
 export function cancelarItem(botId, itemId) {
@@ -149,7 +156,10 @@ export function passarNaFrente(botId, itemId) {
 // Bots de trabalho pesado (edição, render, transcrição): um de cada vez no computador inteiro. Os outros esperam a
 // vez na fila; bots leves continuam normalmente. (Compactação de memória não conta como pesada.)
 const esperandoPesado = new Set();
-const ehPesado = (botId, item) => !!bots.get(botId)?.pesado && !item?.especial;
+// "pesado" (um de cada vez no PC: corte, edição, render). Resultado que outro bot devolveu (conferir, subir no Drive)
+// e as rondas do Head não são pesados: não esperam a vez.
+const ehPesado = (botId, item) => !!bots.get(botId)?.pesado && !item?.especial
+  && !(item?.origem?.tipo === 'bot' && !item?.tarefa) && item?.origem?.tipo !== 'rotina-head';
 function pesadoAtivo() {
   for (const [id, a] of ativos) if (ehPesado(id, a.item)) return id;
   return null;
@@ -171,6 +181,7 @@ export function enviar(botId, item) {
   const origem = item.origem || { tipo: 'usuario' };
   item.id = crypto.randomBytes(5).toString('hex');
   item.criado = Date.now();
+  item.botId = bot.id;
   if (!item.especial) {
     const papel = { usuario: 'usuario', bot: 'entrada', rotina: 'rotina' }[origem.tipo] || 'sistema';
     const msg = db.addMensagem({
@@ -178,6 +189,8 @@ export function enviar(botId, item) {
       texto: item.texto, meta: { anexos: item.anexos || [], deNome: origem.nome || null, aguardar: !!item.aguardar, rotina: item.rotina || null, sala: item.sala || null },
     });
     emitir('msg', msg);
+    // pedido direto do usuário a este bot (fora da Galáxia): aparece no grupo também
+    if (origem.tipo === 'usuario' && !item.sala && !item.retomada) { try { galaxia.aoPedidoDireto(bot, item.texto, { tarefa: item.tarefa }); } catch {} }
   }
   const fila = filas.get(bot.id) || [];
   if (item.frente) fila.unshift(item); else fila.push(item);
@@ -199,7 +212,7 @@ export function parar(botId, { limparFila = false } = {}) {
   }
   if (!a) { const b = bots.get(botId); if (b) avisarEstado(b); return false; }
   a.parado = true;
-  matarArvore(a.child);
+  if (a.interromper) a.interromper(); else matarArvore(a.child);
   return true;
 }
 
@@ -217,10 +230,11 @@ function textoDoItem(item) {
   let t = String(item.texto || '');
   if (item.retomada) t = `[Retomada: o servidor reiniciou no meio deste trabalho (queda de energia, reinício do computador ou atualização). A conversa até o último passo salvo continua nesta sessão. Antes de refazer qualquer coisa, confira o que já existe na pasta (downloads, transcrições, projetos) e continue de onde parou. Avise com mcp__flow__progresso que retomou.]\n${t}`;
   if (o.tipo === 'rotina') t = `[Rotina "${o.nome}" — disparada sozinha, o usuário não está acompanhando agora. Faça o trabalho completo; se precisar de uma decisão dele, deixe a pergunta no fim. Ninguém responde a uma tela de login nesta hora: se cair numa, diga isso no resultado.]\n${t}`;
-  if (item.sala) t = `[Mensagem do usuário na sala do squad${item.salaOutros?.length ? `, enviada também para ${item.salaOutros.map((n) => '@' + n).join(', ')} (cada um dá a sua resposta)` : ''}. A sua resposta final aparece na sala.]\n${t}`;
+  if (item.sala) t = `${galaxia.TOM}\n[${item.salaOutros?.length ? `Enviada também para ${item.salaOutros.map((n) => '@' + n).join(', ')} (cada um dá a sua resposta). ` : ''}A sua resposta final aparece na Galáxia.]\n${t}`;
   if (o.tipo === 'bot') {
     t = `[Mensagem de @${o.nome} — bot do seu squad${item.aguardar ? '. Ele está esperando: a sua resposta final deste turno volta automaticamente para ele' : ''}]\n${t}`;
   }
+  if (!item.rotina && !item.sala) { const ctx = demandas.contextoParaBot(item.botId || ''); if (ctx) t = `${ctx}\n\n${t}`; }
   if (item.anexos?.length) {
     t += `\n\n[Anexos enviados pelo usuário]\n${item.anexos.map((a) => `- ${a.caminho} (${(a.tamanho / 1e6).toFixed(1)} MB)`).join('\n')}`;
   }
@@ -228,9 +242,54 @@ function textoDoItem(item) {
 }
 
 // ---------- turno ----------
+// ---------- limite de uso do ChatGPT ----------
+// Quando a conta bate no limite, cada pedido falharia na hora e sairia da fila. Em vez disso: o pedido volta para a
+// frente da fila e as filas do motor do ChatGPT esperam até a hora que o próprio ChatGPT diz ("try again at 4:28 PM").
+let limiteAte = 0;
+let timerLimite = null;
+const avisadosLimite = new Set();
+export const ehLimiteDeUso = (erro) => /usage limit|hit your usage|limite de uso|rate limit|too many requests|\b429\b|quota/i.test(String(erro || ''));
+function horaDoLimite(erro) {
+  const m = String(erro).match(/try again at (\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (m) {
+    let h = Number(m[1]) % 12;
+    if ((m[3] || '').toUpperCase() === 'PM') h += 12;
+    if (!m[3] && Number(m[1]) >= 12) h = Number(m[1]);
+    const d = new Date(); d.setHours(h, Number(m[2]) + 1, 0, 0);
+    if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  }
+  return Date.now() + 15 * 60000; // sem hora no aviso: tenta de novo em 15 min
+}
+function segurarPorLimite(bot, item, erro) {
+  const fila = filas.get(bot.id) || [];
+  filas.set(bot.id, fila);
+  fila.unshift(item);
+  salvarFilas();
+  const ate = horaDoLimite(erro);
+  if (ate > limiteAte) {
+    limiteAte = ate;
+    clearTimeout(timerLimite);
+    timerLimite = setTimeout(() => {
+      limiteAte = 0;
+      avisadosLimite.clear();
+      for (const id of filas.keys()) setImmediate(() => proximo(id));
+    }, Math.max(5000, ate - Date.now()));
+  }
+  if (!avisadosLimite.has(bot.id)) {
+    avisadosLimite.add(bot.id);
+    const hora = new Date(limiteAte).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    emitir('msg', db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'sistema',
+      texto: `O limite de uso do ChatGPT acabou. Nada se perdeu: este pedido e a fila ficaram guardados e voltam sozinhos às ${hora} (quando o limite renova). Para tentar antes, pause e retome a fila.` }));
+    if (avisadosLimite.size === 1) notificar({ titulo: 'Limite do ChatGPT', texto: `As filas dos bots voltam sozinhas às ${hora}.`, forcar: true, tag: 'limite-chatgpt' }).catch(() => {});
+  }
+}
+
 async function proximo(botId) {
   if (ativos.has(botId)) return;
   const fila = filas.get(botId) || [];
+  // limite de uso do ChatGPT: a fila espera a renovação (retomar a fila na mão tenta de novo na hora)
+  if (limiteAte > Date.now() && fila.length && !fila[0]?.especial && motorDo(bots.get(botId) || {}) === 'codex') { const b = bots.get(botId); if (b) avisarEstado(b); return; }
   // fila pausada: só a compactação de memória passa
   if (bots.get(botId)?.pausado && !fila[0]?.especial) { const b = bots.get(botId); if (b) avisarEstado(b); return; }
   if (fila.length && ehPesado(botId, fila[0])) {
@@ -312,17 +371,30 @@ export function pastasCentrais() {
 // {{bot}} nos valores de env do bot = pasta do bot (ex.: "{{bot}}/trabalho/edicoes").
 export const expandirBot = (bot, v) => String(v).replace(/\{\{bot\}\}/g, dirBot(bot));
 
-function envDoTurno(bot) {
+export function envDoTurno(bot) {
   const centrais = pastasCentrais();
   for (const p of new Set([centrais.TEMP])) fs.mkdirSync(p, { recursive: true });
   const proprios = Object.fromEntries(Object.entries(bot.env || {}).map(([k, v]) => [k, expandir(expandirBot(bot, v))]));
   const env = { ...process.env, ...centrais, ...segredos(), ...proprios };
+  delete env.VOZ_OPENAI_KEY; // chave da conversa por voz: só o voz.js usa; os bots ficam no plano (Claude/Codex)
+  delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY; // nenhuma chave paga da OpenAI chega aos bots
   env.FLOW_TRABALHO = path.join(dirBot(bot), 'trabalho');
+  env.FLOW_CEREBRO = path.join(HOME, 'cerebro');
+  env.FLOW_SPY = path.join(HOME, 'squads', bot.squad, 'spy.json'); // aba Spy: monitoradas e blacklist do squad
   env.FLOW_URL = FLOW_URL;
   env.FLOW_BOT = bot.id;
   env.FLOW_TOKEN = bot.token; // o gancho guarda-exclusao.js abre a confirmação no app com ele
   env.MCP_TOOL_TIMEOUT = String(Math.max(30, config.squad.esperaMaxMin + 5) * 60 * 1000);
   env.PYTHONUTF8 = '1';
+  // Git Bash no caminho (o motor do ChatGPT roda os comandos das skills com "bash -c"; o servidor, como serviço do
+  // Windows, nem sempre herda o PATH do usuário)
+  if (IS_WIN) {
+    const git = ['C:\\Program Files\\Git\\bin', 'C:\\Program Files\\Git\\usr\\bin'].filter((p) => fs.existsSync(p));
+    const chave = Object.keys(env).find((k) => k.toLowerCase() === 'path') || 'Path';
+    const atual = env[chave] || '';
+    const faltam = git.filter((p) => !atual.toLowerCase().includes(p.toLowerCase()));
+    if (faltam.length) env[chave] = [...faltam, atual].join(';');
+  }
   delete env.CLAUDECODE; // se o servidor foi aberto de dentro de outra sessão do Claude Code
   return env;
 }
@@ -334,6 +406,15 @@ function resumoFerramenta(nome, entrada = {}) {
 }
 
 function executar(bot, item, tentativa = 0) {
+  // VoiceStudio ligado no bot: sobe o servidor local antes do turno (o MCP dele precisa estar no ar)
+  if (!item.vsConferido && conectoresDoBot(bot).includes('voicestudio') && voicestudio.onde().instalado) {
+    item.vsConferido = true;
+    return voicestudio.ligar().catch((e) => console.error('VoiceStudio:', e.message)).then(() => executar(bot, item, tentativa));
+  }
+  // repasse de outro bot: "recebi, já tô nessa" na Galáxia
+  if (!tentativa && !item.retomada && item.tarefa && item.origem?.tipo === 'bot') { try { galaxia.aoComecar(db.pegarTarefa(item.tarefa), bot.id, item.origem.id); } catch {} }
+  else if (!tentativa && !item.retomada && !item.especial && !item.sala && (item.origem?.tipo || 'usuario') === 'usuario' && !item.jaAvisouGalaxia) { item.jaAvisouGalaxia = true; try { galaxia.aoComecarDireto(bot); } catch {} }
+  if (motorDo(bot) === 'codex' || motorDo(bot) === 'grok') return executarCodex(bot, item);
   return new Promise((resolve, reject) => {
     const nova = !bot.sessao;
     if (nova) {
@@ -429,17 +510,20 @@ function executar(bot, item, tentativa = 0) {
       rl.close();
       const dur = Date.now() - inicio;
       const final = resultado?.result ?? textos.at(-1) ?? '';
-      const erroCli = !resultado && !estado.parado ? (stderr.trim().split('\n').slice(-3).join(' ') || `o CLI saiu com código ${code}`) : null;
+      // o CLI novo manda o erro dentro do "result" (is_error + errors), não só no stderr
+      const errosResultado = resultado?.is_error && Array.isArray(resultado.errors) ? resultado.errors.join(' ') : '';
+      const erroCli = estado.parado ? null : !resultado ? (stderr.trim().split('\n').slice(-3).join(' ') || `o CLI saiu com código ${code}`)
+        : resultado.is_error && !String(resultado.result || '').trim() ? (errosResultado || resultado.subtype || 'o CLI devolveu erro') : null;
 
-      // sessão sumiu (apagada pela limpeza do CLI, outro computador…): começa uma nova com a mesma memória
-      if (!nova && !resultado && /No conversation found|session.*not found/i.test(stderr) && tentativa === 0) {
+      // sessão sumiu (apagada pela limpeza do CLI, outro computador, troca de motor…): começa uma nova com a mesma memória
+      if (!nova && (!resultado || resultado.is_error) && /No conversation found|session.*not found/i.test(`${stderr} ${errosResultado}`) && tentativa === 0) {
         db.fecharTurno(turno, { status: 'refeito', erro: 'sessão não encontrada' });
         bot.sessao = null;
         ativos.delete(bot.id);
         return executar(bot, item, 1).then(resolve, reject);
       }
 
-      if (resultado?.session_id) bot.sessao = resultado.session_id;
+      if (resultado?.session_id && motorDo(bot) === 'claude' && !resultado.is_error) bot.sessao = resultado.session_id;
       bot.ctxTokens = ctx;
       bot.sessaoTurnos = (bot.sessaoTurnos || 0) + 1;
       bot.custoEstimado = (bot.custoEstimado || 0) + (resultado?.total_cost_usd || 0);
@@ -460,11 +544,122 @@ function executar(bot, item, tentativa = 0) {
       emitir('turno', { bot: bot.id, fim: true, turno, ms: dur, contexto: ctx });
 
       item.aguardar?.resolve?.({ texto: final, erro: erroCli });
-      try { ganchos.fimDoTurno?.(bot, item, { final, erro: erroCli, parado: estado.parado }); } catch (e) { console.error('[fim do turno]', e.message); }
+      try { ganchos.fimDoTurno?.(bot, item, { final, erro: erroCli, parado: estado.parado, dur }); } catch (e) { console.error('[fim do turno]', e.message); }
       await depoisDoTurno(bot, item, { final, dur, erroCli, parado: estado.parado });
       resolve();
     });
   });
+}
+
+// ---------- motor ChatGPT (Codex App Server) ----------
+// O motor de cada bot: bot.motor ("codex" | "claude" | "grok") ou o padrão do config.json ("motor"). Tudo o que vem depois do
+// turno (fila, kanban, notificação, compactação, retomada) é o mesmo para os dois.
+export const motorDo = (bot) => bot.motor || config.motor || 'claude';
+
+const NOTA_CODEX = `
+
+## Ferramentas neste motor (ChatGPT)
+- As ferramentas citadas acima como mcp__flow__<nome> são as do servidor "flow" (ex.: mcp__flow__progresso = flow/progresso); mcp__navegador__* = navegador/*. Use-as do mesmo jeito.
+- Os apps da conta do ChatGPT do usuário (Gmail, Drive, Agenda…) aparecem como ferramentas próprias; quando o pedido for sobre e-mail, agenda ou arquivos dele, use esses apps. Mais de uma conta conectada: use a que ele disser; se não disser, pergunte no fim.
+- Para olhar uma imagem (folha de quadros, captura de tela), use a ferramenta de ver imagem com o caminho do arquivo.
+- Skills: as da sua pasta .claude/skills estão disponíveis; quando o pedido for o caso de uma delas, leia o SKILL.md e siga.
+- TERMINAL: as skills (perfect-edit, broll-youtube, baixar-do-drive, motion-vox) e as instruções do seu modelo foram escritas para o **Git Bash** ($FLOW_TRABALHO, export, aspas, ls/tail, heredoc). Rode esses comandos **dentro do bash**, sem traduzir para PowerShell: bash -c '<comando da skill>' (o bash do Git já está no PATH). Variáveis de ambiente (FLOW_TRABALHO, PERFECT_EDIT_ATLAS, ESTUDIO_RAIZ, ESTUDIO_BROLLS…) já vêm prontas no bash. Os scripts de uma skill ficam na pasta dela: .claude/skills/<skill>/ (ex.: .claude/skills/perfect-edit/scripts/corte, com o Python em .claude/skills/perfect-edit/.venv/Scripts/python.exe); o Atlas fica em $PERFECT_EDIT_ATLAS, com o Python em .venv/Scripts/python.exe.
+- Comando curto que não é de skill pode ser PowerShell. Apagar qualquer coisa abre a confirmação do usuário no app: use o comando direto e espere.
+`;
+
+const NOTA_GROK = `
+
+## Ferramentas neste motor (Grok)
+- Você está rodando no Grok (xAI), com o plano do usuário. As ferramentas citadas acima como mcp__flow__<nome> são as do servidor MCP "flow"; mcp__navegador__* = navegador. Use-as do mesmo jeito.
+- Os conectores do claude.ai (Gmail, Drive, Notion… da conta do Claude) NÃO existem neste motor. Se o pedido depender deles, diga isso no fim e sugira passar o bot para o Claude.
+- IMAGEM E VÍDEO: você tem image_gen (gerar imagem), image_edit (editar uma imagem), image_to_video (animar uma imagem) e reference_to_video (vídeo a partir de referências). Use quando o usuário pedir imagem, foto, arte, criativo, animação ou vídeo gerado. O arquivo gerado aparece no chat do usuário sozinho: não precisa copiar nem entregar; só diga em uma frase o que foi feito.
+- Skills: as da sua pasta .claude/skills estão disponíveis; quando o pedido for o caso de uma delas, leia o SKILL.md e siga.
+- TERMINAL: as skills e as instruções do seu modelo foram escritas para o **Git Bash** ($FLOW_TRABALHO, export, aspas, ls/tail, heredoc). Rode esses comandos dentro do bash: bash -c '<comando da skill>' (o bash do Git já está no PATH; as variáveis FLOW_* já vêm prontas).
+- Apagar qualquer coisa abre a confirmação do usuário no app. Se ele recusar, o turno para: não tente apagar de outro jeito.
+`;
+
+async function executarCodex(bot, item) {
+  const nova = !bot.sessao;
+  if (nova) { bot.sessaoInicio = Date.now(); bot.sessaoTurnos = 0; bot.ctxTokens = 0; }
+  const mcp = montarMcp(bot, { flowUrl: FLOW_URL });
+  const snapArq = path.join(dirBot(bot), '.flow', 'sistema.md');
+  // os conectores do claude.ai (Gmail, Drive… da conta do Claude) não existem neste motor: no lugar deles, os apps da
+  // conta do ChatGPT, que o Codex já entrega como ferramentas
+  const nomeMotor = motorDo(bot);
+  const ehGrok = nomeMotor === 'grok';
+  const apps = ehGrok ? [] : (codex.appsEmCache() || []).filter((x) => x.ligado).map((x) => x.nome);
+  const conectores = [...mcp.ativos.filter((c) => c.tipo !== 'claudeai'),
+    ...(apps.length ? [{ nome: 'Apps da conta do ChatGPT', descricao: apps.join(', ') + '.' }] : [])];
+  const snapshot = nova || bot.snapshotSujo || !fs.existsSync(snapArq) ? montarSnapshot(bot, { conectores, avisos: mcp.avisos }) : snapArq;
+  bot.snapshotSujo = false;
+  const instrucoes = fs.readFileSync(snapshot, 'utf8') + (ehGrok ? NOTA_GROK : NOTA_CODEX);
+  const origemTxt = item.origem?.tipo === 'bot' ? `bot:${item.origem.id}` : item.origem?.tipo || 'usuario';
+  const turno = db.iniciarTurno({ bot: bot.id, sessao: bot.sessao, origem: origemTxt });
+  const inicio = Date.now();
+  const estado = { child: null, turno, item, inicio, sessao: bot.sessao, parado: false, cadeia: item.cadeia || 0, motor: nomeMotor };
+  ativos.set(bot.id, estado);
+  salvarFilas();
+  const longo = setTimeout(() => { try { ganchos.turnoLongo?.(bot, item); } catch (e) { console.error('[turno longo]', e.message); } }, 90e3);
+  bot.ultimaAtividade = inicio;
+  avisarEstado(bot);
+  emitir('turno', { bot: bot.id, inicio: true, turno });
+
+  const ferramentas = new Map();
+  const add = (papel, texto, meta) => db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel, texto, meta });
+  const r = await (ehGrok ? grok : codex).turno(bot, {
+    env: envDoTurno(bot), item, texto: textoDoItem(item), instrucoes, mcpArquivo: mcp.arquivo, estado,
+    cb: {
+      delta: (t) => emitir('delta', { bot: bot.id, turno, texto: t }),
+      texto: (t) => emitir('msg', add('bot', t, { turno })),
+      ferramenta: (id, nome, resumo, sub) => {
+        const m = add('ferramenta', `${nome} ${resumo}`.trim(), { turno, nome, resumo, id, sub: !!sub });
+        ferramentas.set(id, m.id); emitir('msg', m);
+      },
+      ferramentaFim: (id, erro) => { if (ferramentas.has(id)) emitir('ferramenta', { bot: bot.id, msg: ferramentas.get(id), erro }); },
+      limite: (info) => { limiteUso = { ...info, motor: nomeMotor, visto: Date.now() }; emitir('limite', limiteUso); },
+      aviso: (t) => console.error(`[${bot.nome}] ${nomeMotor}:`, t),
+      // Grok gerou imagem/vídeo: copia para as entregas do bot e mostra no chat
+      midia: (arq, legenda) => {
+        try {
+          const dest = path.join(dirBot(bot), 'trabalho', 'entregas', 'grok');
+          fs.mkdirSync(dest, { recursive: true });
+          const nome = `${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}-${path.basename(arq)}`;
+          const final = path.join(dest, nome);
+          fs.copyFileSync(arq, final);
+          if (templateDe(bot.template)?.midiaNoChat === false) return; // este bot entrega em quadro, do jeito dele
+          import('./interno.js').then((i) => i.chamar(bot, 'arquivo_entregar', { caminho: final, legenda })).catch((e) => console.error('[grok midia]', e.message));
+        } catch (e) { console.error('[grok midia]', e.message); }
+      },
+      pedirExclusao: async (x) => (await import('./interno.js')).pedirExclusao(bot, x),
+    },
+  });
+  clearTimeout(longo);
+  const dur = Date.now() - inicio;
+  const parado = estado.parado || !!r.parado;
+  const erro = r.erro && !parado ? r.erro : null;
+  if (r.sessao && motorDo(bot) === nomeMotor) bot.sessao = r.sessao; // trocaram o motor durante o turno: não regrava
+  if (r.ctx != null) bot.ctxTokens = r.ctx;
+  if (r.ctxMax) bot.ctxMax = r.ctxMax;
+  bot.sessaoTurnos = (bot.sessaoTurnos || 0) + 1;
+  bot.ultimaAtividade = Date.now();
+  bot.status = erro ? 'erro' : 'ocioso';
+  salvarBot(bot);
+  db.fecharTurno(turno, { status: parado ? 'parado' : erro ? 'erro' : 'ok', custo: null, contexto: bot.ctxTokens || null, erro });
+  if (erro && ehLimiteDeUso(erro) && !item.especial) {
+    bot.status = 'ocioso';
+    salvarBot(bot);
+    emitir('turno', { bot: bot.id, fim: true, turno, ms: dur, contexto: bot.ctxTokens });
+    segurarPorLimite(bot, item, erro);
+    return;
+  }
+  if (parado) emitir('msg', add('sistema', 'Parado pelo usuário.'));
+  if (r.recusado && !parado) emitir('msg', add('sistema', 'Exclusão recusada: o Grok parou este turno sem apagar nada.'));
+  if (erro) emitir('msg', add('sistema', `${ehGrok ? 'O Grok' : 'O ChatGPT (Codex)'} falhou: ${erro}`));
+  emitir('turno', { bot: bot.id, fim: true, turno, ms: dur, contexto: bot.ctxTokens });
+  const final = r.final || '';
+  item.aguardar?.resolve?.({ texto: final, erro });
+  try { ganchos.fimDoTurno?.(bot, item, { final, erro, parado, dur }); } catch (e) { console.error('[fim do turno]', e.message); }
+  await depoisDoTurno(bot, item, { final, dur, erroCli: erro, parado });
 }
 
 async function depoisDoTurno(bot, item, { final, dur, erroCli, parado }) {

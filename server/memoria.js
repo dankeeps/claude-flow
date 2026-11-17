@@ -87,7 +87,7 @@ export function ultimosResumos(bot, n = config.memoria.resumosNoContexto) {
 export function precisaCompactar(bot) {
   if (!bot.sessao || !bot.sessaoTurnos) return null;
   const m = config.memoria;
-  if (bot.ctxTokens > m.contextoMax * m.compactarEm) return `a sessão chegou a ${Math.round(bot.ctxTokens / 1000)} mil tokens`;
+  if (bot.ctxTokens > (bot.ctxMax || m.contextoMax) * m.compactarEm) return `a sessão chegou a ${Math.round(bot.ctxTokens / 1000)} mil tokens`;
   if (bot.sessaoInicio && Date.now() - bot.sessaoInicio > m.compactarDias * 86400e3) return `a sessão tem mais de ${m.compactarDias} dias`;
   return null;
 }

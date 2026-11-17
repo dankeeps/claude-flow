@@ -1,0 +1,68 @@
+{
+  "nome": "Spy",
+  "descricao": "Caça ofertas de resposta direta (VSL e quiz) escalando na Biblioteca de Anúncios da Meta: busca por palavras combinadas, filtra por escala, confere a página de destino, lista no chat para você aprovar e põe as aprovadas na aba Spy da sala do squad (com blacklist). Também baixa anúncio e VSL, transcreve e analisa.",
+  "avatar": {
+    "planeta": "netuno"
+  },
+  "ordem": 20,
+  "modelo": "gpt-6.1-sol",
+  "esforco": "medium",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": [
+    "navegador"
+  ],
+  "pastas": [
+    "~/Downloads"
+  ],
+  "env": {
+    "PERFECT_EDIT_ATLAS": "{{atlas.dir}}"
+  },
+  "cerebro": [
+    "biblioteca/Palavras-chave Spy.md"
+  ],
+  "preferencias": [
+    {
+      "chave": "pais",
+      "rotulo": "País das buscas",
+      "tipo": "escolha",
+      "opcoes": [
+        "BR",
+        "US",
+        "BR + US",
+        "Latam (MX, CO, AR)",
+        "todos (ALL)"
+      ],
+      "padrao": "BR"
+    },
+    {
+      "chave": "minAnuncios",
+      "rotulo": "Escala: mínimo de anúncios ativos",
+      "tipo": "texto",
+      "padrao": "20"
+    },
+    {
+      "chave": "minDias",
+      "rotulo": "Escala: ou anúncio no ar há pelo menos (dias)",
+      "tipo": "texto",
+      "padrao": "10"
+    },
+    {
+      "chave": "tipos",
+      "rotulo": "Tipo de oferta que entra",
+      "tipo": "escolha",
+      "opcoes": [
+        "VSL e quiz",
+        "só VSL",
+        "só quiz"
+      ],
+      "padrao": "VSL e quiz"
+    },
+    {
+      "chave": "porBusca",
+      "rotulo": "Ofertas por busca (para e mostra)",
+      "tipo": "texto",
+      "padrao": "15"
+    }
+  ]
+}

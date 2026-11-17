@@ -1,0 +1,56 @@
+{
+  "nome": "Gestor de projetos",
+  "descricao": "Triagem dos brutos (transcreve, junta as partes, confere com o roteiro, tira erro e silêncio, renderiza, dá o nome certo e sobe na pasta), relatório do que faltou gravar em Relevantes, repasse ao Editor, sobe os editados no Drive (sem revisar) e monitora as bibliotecas da aba Spy.",
+  "avatar": {
+    "planeta": "saturno"
+  },
+  "ordem": 15,
+  "modelo": "gpt-6.1-sol",
+  "esforco": "medium",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": [
+    "navegador",
+    "atlas"
+  ],
+  "pastas": [
+    "G:/Meu Drive",
+    "~/Downloads"
+  ],
+  "env": {
+    "PERFECT_EDIT_ATLAS": "{{atlas.dir}}"
+  },
+  "skillsDe": [
+    "editor/perfect-edit",
+    "spy/spy-ads"
+  ],
+  "preferencias": [
+    {
+      "chave": "nomenclatura",
+      "rotulo": "Nome dos arquivos",
+      "tipo": "texto",
+      "padrao": "o nome do anúncio no roteiro (padrão o_k01_pbs_v1_r1: tipo, número, sigla da oferta, versão, remessa)"
+    },
+    {
+      "chave": "resolucao",
+      "rotulo": "Resolução do corte",
+      "tipo": "escolha",
+      "opcoes": [
+        "1080x1920 (vai para a edição)",
+        "original do bruto"
+      ],
+      "padrao": "1080x1920 (vai para a edição)"
+    },
+    {
+      "chave": "repasse",
+      "rotulo": "Depois da triagem",
+      "tipo": "escolha",
+      "opcoes": [
+        "mandar para o Editor sozinho",
+        "esperar meu OK antes de mandar"
+      ],
+      "padrao": "mandar para o Editor sozinho"
+    }
+  ],
+  "pesado": true
+}

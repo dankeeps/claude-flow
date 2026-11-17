@@ -4,17 +4,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { HOME, config, lerJSON, gravarJSON } from './config.js';
-import { bots, squads, botsDoSquad, acharNoSquad, salvarBot } from './store.js';
+import { bots, squads, botsDoSquad, acharNoSquad, salvarBot, conectoresDoBot } from './store.js';
+import * as nuvem from './nuvem.js';
+import * as kie from './kie.js';
+import { dirBot } from './store.js';
 import * as db from './db.js';
 import * as mem from './memoria.js';
 import * as runner from './runner.js';
 import * as nav from './navegador.js';
 import { emitir, notificar } from './eventos.js';
 import { template } from './templates.js';
+import * as templates from './templates.js';
+import * as demandas from './demandas.js';
 import * as atlas from './atlas.js';
 import * as tarefas from './tarefas.js';
 import * as recursos from './recursos.js';
 import * as rotinas from './rotinas.js';
+import * as sd from './squaddados.js';
+import * as galaxia from './galaxia.js';
 
 // Repasses seguidos entre bots sem o usuário: passou do limite, pausa e avisa.
 function proximaCadeia(bot, alvo) {
@@ -119,6 +126,14 @@ function formatarBot(b) {
   return `- @${b.nome} (id: ${b.id}) [${e.status}${e.fila ? `, ${e.fila} na fila` : ''}] — ${(mem.ler(b, 'funcao').split('\n').find((l) => l.trim()) || 'sem função').replace(/^#+\s*/, '').slice(0, 160)}`;
 }
 
+// ---------- kie.ai ----------
+function kieLigado(bot) { if (!conectoresDoBot(bot).includes(kie.ID)) throw new Error('O conector kie.ai não está ligado para este bot (Conectores do squad).'); }
+const pastaKie = (bot) => path.join(dirBot(bot), 'trabalho', 'entregas', 'kie');
+function kieResposta(r) {
+  if (!r.pronto) return `Ainda gerando na kie.ai (estado: ${r.estado}${r.progresso ? `, ${r.progresso}%` : ''}). Chame kie_aguardar com taskId "${r.taskId}".`;
+  return `Pronto (${r.modelo}, ${r.segundos ?? '?'} s, ${r.creditos ?? '?'} créditos). Arquivos salvos:\n${r.arquivos.join('\n')}\nMostre ao usuário com mcp__flow__arquivo_entregar ou quadro_entregar.`;
+}
+
 const ferramentas = {
   squad_bots(bot) {
     const sq = squads.get(bot.squad);
@@ -126,14 +141,14 @@ const ferramentas = {
     return `Squad ${sq?.nome}: ${outros.length ? '\n' + outros.map(formatarBot).join('\n') : 'nenhum outro bot por enquanto.'}`;
   },
 
-  bot_enviar(bot, { para, mensagem, aguardar = false }) {
+  bot_enviar(bot, { para, mensagem, aguardar = false, na_frente = false }) {
     const alvo = acharNoSquad(bot.squad, para);
     if (!alvo) throw new Error(`Não há bot "${para}" no seu squad. ${ferramentas.squad_bots(bot)}`);
     if (alvo.id === bot.id) throw new Error('Esse bot é você.');
     const cadeia = proximaCadeia(bot, alvo);
     const origem = { tipo: 'bot', id: bot.id, nome: bot.nome };
     if (!aguardar) {
-      const e = runner.enviar(alvo.id, { texto: mensagem, origem, cadeia });
+      const e = runner.enviar(alvo.id, { texto: mensagem, origem, cadeia, frente: !!na_frente });
       return `Entregue para @${alvo.nome} (${e.status}${e.fila > 1 ? `, ${e.fila} na fila` : ''}). Ele não responde automaticamente; se precisar da resposta, use aguardar=true.`;
     }
     for (let x = alvo.id, n = 0; x && n < 50; x = esperando.get(x), n++) {
@@ -164,14 +179,14 @@ const ferramentas = {
     return `${tarefas.comoTexto(t)}\n\n${t.descricao || '(sem descrição)'}${t.entregaveis ? `\n\nPronto quando: ${t.entregaveis}` : ''}\nPasta: ${tarefas.pastaDaTarefa(t) || '(sem responsável)'}\n\nHistórico:\n${ev.join('\n')}`;
   },
 
-  tarefa_criar(bot, { titulo, descricao = '', entregaveis = '', para = '', comecar = true }) {
+  tarefa_criar(bot, { titulo, descricao = '', entregaveis = '', para = '', comecar = true, na_frente = false }) {
     const alvo = para ? acharNoSquad(bot.squad, para) : bot;
     if (!alvo) throw new Error(`Não há bot "${para}" no seu squad. ${ferramentas.squad_bots(bot)}`);
     const pai = runner.turnoAtivo(bot.id)?.item?.tarefa || null;
     const repasse = alvo.id !== bot.id;
     const cadeia = repasse && comecar ? proximaCadeia(bot, alvo) : 0;
     let t = tarefas.criar({ squad: bot.squad, bot: alvo.id, titulo, descricao, entregaveis, pai, status: repasse ? 'afazer' : 'fazendo' }, { autor: bot.id });
-    if (repasse && comecar) t = tarefas.enviar(t, { autor: bot.id, cadeia });
+    if (repasse && comecar) t = tarefas.enviar(t, { autor: bot.id, cadeia, frente: !!na_frente });
     return repasse
       ? `Tarefa #${t.id} criada para @${alvo.nome}${comecar ? ' e enviada (ele começa assim que estiver livre)' : ' (ainda não enviada)'}. Quando ele marcar revisão/feito, você recebe o resultado aqui${comecar ? '' : ''}. Para esperar várias ao mesmo tempo: tarefas_aguardar.`
       : `Tarefa #${t.id} registrada para você, em "Fazendo". Atualize com tarefa_atualizar quando terminar.`;
@@ -288,6 +303,68 @@ const ferramentas = {
     return 'Aviso mostrado ao usuário. Continue o trabalho.';
   },
 
+  // ---------- o que outro bot está fazendo (para o Head conferir) ----------
+  bot_atividade(bot, { bot: quem, limite = 40 }) {
+    const alvo = acharNoSquad(bot.squad, quem);
+    if (!alvo) throw new Error(`Não há bot "${quem}" no seu squad.`);
+    const a = runner.turnoAtivo(alvo.id);
+    const e = runner.estadoBot(alvo);
+    const linhas = [`@${alvo.nome}: ${e.status}${a ? ` há ${Math.round((Date.now() - a.inicio) / 60000)} min` : ''}, ${e.fila} na fila${e.pausado ? ' (fila pausada)' : ''}`];
+    if (a?.item) {
+      const t = a.item.tarefa ? db.pegarTarefa(a.item.tarefa) : null;
+      linhas.push(`Trabalhando em: ${t ? `tarefa #${t.id} "${t.titulo}"` : 'pedido do chat'}`);
+      if (t) {
+        const notas = db.eventosDaTarefa(t.id).filter((x) => x.tipo === 'nota').slice(-6).map((x) => `  - ${tarefas.nomeAutor(x.autor)}: ${String(x.texto).replace(/\s+/g, ' ').slice(0, 300)}`);
+        if (notas.length) linhas.push('Notas da tarefa:', ...notas);
+      }
+    }
+    const desde = a?.inicio || Date.now() - 3 * 3600e3;
+    const msgs = [].concat(db.listarMensagens(alvo.id, { limite: 400 })).filter((m) => m.criado >= desde - 1000 && ['bot', 'progresso', 'ferramenta', 'sistema', 'arquivo', 'quadro'].includes(m.papel)).slice(-Math.min(120, Number(limite) || 40));
+    linhas.push(`Atividade (últimas ${msgs.length}):`);
+    for (const m of msgs) linhas.push(`  ${new Date(m.criado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} ${m.papel === 'ferramenta' ? '⚙' : m.papel}: ${String(m.texto).replace(/\s+/g, ' ').slice(0, m.papel === 'ferramenta' ? 220 : 500)}`);
+    return linhas.join('\n');
+  },
+  bot_regras(bot, { bot: quem }) {
+    const alvo = acharNoSquad(bot.squad, quem);
+    if (!alvo) throw new Error(`Não há bot "${quem}" no seu squad.`);
+    const t = template(alvo.template);
+    const prefs = Object.entries(alvo.prefs || {}).map(([k, v]) => `- ${(t?.preferencias || []).find((p) => p.chave === k)?.rotulo || k}: ${v}`).join('\n');
+    let instr = '';
+    try { instr = fs.readFileSync(path.join(templates.dirTemplate(alvo.template), 'instrucoes.md'), 'utf8'); } catch {}
+    return [`# Função de @${alvo.nome}`, mem.ler(alvo, 'funcao') || '(sem função)', '# Preferências', prefs || '(nenhuma)', '# Memória', mem.ler(alvo, 'memoria') || '(vazia)', '# Instruções do modelo dele', instr.slice(0, 9000) || '(nenhuma)'].join('\n\n');
+  },
+
+  // ---------- spy (aba Spy da sala do squad) ----------
+  spy_listar(bot, { lista = 'monitoradas' }) {
+    const d = sd.spy(bot.squad);
+    if (lista === 'blacklist') return d.blacklist.length ? d.blacklist.map((b) => `- ${b.pagina || '(sem nome)'} · page_id ${b.page_id || '?'}${b.motivo ? ` · ${b.motivo}` : ''}`).join('\n') : '(blacklist vazia)';
+    return d.monitoradas.length ? d.monitoradas.map((m) => `- ${m.pagina} · page_id ${m.page_id} · ${m.tipo || 'tipo ?'} · ${m.nicho || 'sem nicho'} · ${m.ativos ?? '?'} ativos${m.conferido ? ` em ${new Date(m.conferido).toLocaleDateString('pt-BR')}` : ''}${m.ativa === false ? ' · PAUSADA' : ''} · ${m.biblioteca}`).join('\n') : '(nenhuma biblioteca monitorada)';
+  },
+  spy_monitorar(bot, x) {
+    const m = sd.monitorar(bot.squad, x, { por: bot.id });
+    emitir('spy', { squad: bot.squad });
+    return `${m.pagina || m.page_id} está na aba Spy (monitorada${m.ativos !== undefined ? `, ${m.ativos} ativos` : ''}).`;
+  },
+  spy_conferencias(bot, { itens = [] }) {
+    const r = sd.conferencias(bot.squad, itens);
+    emitir('spy', { squad: bot.squad });
+    return r.length ? r.map((x) => `- ${x.pagina}: ${x.ativos} ativos${x.variacao === null ? '' : ` (${x.variacao >= 0 ? '+' : ''}${x.variacao})`}`).join('\n') : 'Nenhuma das bibliotecas informadas está monitorada.';
+  },
+  spy_blacklist(bot, x) {
+    const l = sd.blacklistAdicionar(bot.squad, x, { por: bot.id });
+    emitir('spy', { squad: bot.squad });
+    return `${x.pagina || x.page_id} na blacklist (${l.length} no total): não aparece mais nas buscas.`;
+  },
+
+  // ---------- itens relevantes (sala do squad) ----------
+  async relevante_criar(bot, { titulo, texto, tipo = '' }) {
+    const it = sd.relevanteCriar(bot.squad, { titulo, texto, tipo, bot: bot.id });
+    emitir('relevante', { squad: bot.squad, id: it.id });
+    galaxia.aoRelevante(bot.squad, bot.id, it.titulo);
+    await notificar({ titulo: `Relevante: ${it.titulo}`, texto: `${bot.nome} publicou na sala do squad`, bot: bot.id, forcar: true, tag: `relevante-${it.id}` });
+    return `Publicado em Relevantes, na sala do squad: "${it.titulo}".`;
+  },
+
   async notificar(bot, { titulo, texto }) {
     const r = await notificar({ titulo: `${bot.nome}: ${titulo}`, texto, bot: bot.id, forcar: true });
     return `Notificação enviada para ${r.enviados} aparelho(s).`;
@@ -301,6 +378,48 @@ const ferramentas = {
     emitir('msg', m);
     return `Arquivo entregue no app: ${a.nome} (${(a.tamanho / 1e6).toFixed(1)} MB).`;
   },
+
+  // Quadro: uma mensagem só com vários arquivos lado a lado (personagens, storyboard, cenas). Cada item continua sendo
+  // um arquivo separado no disco; o app mostra em grade, numerado, e abre cada um grande ao tocar.
+  quadro_entregar(bot, { titulo = '', itens = [] }) {
+    if (!Array.isArray(itens) || !itens.length) throw new Error('Passe itens: [{ caminho, titulo, texto }].');
+    if (itens.length > 60) throw new Error('No máximo 60 itens por quadro: divida em mais de um.');
+    const lista = itens.map((x, i) => {
+      const caminho = String(x?.caminho || '');
+      if (!caminho || !fs.existsSync(caminho) || fs.statSync(caminho).isDirectory()) throw new Error(`Item ${i + 1}: arquivo não encontrado: ${caminho}`);
+      const a = registrarArquivo(caminho, { bot: bot.id });
+      return { token: a.token, nome: a.nome, tamanho: a.tamanho, titulo: String(x.titulo || '').slice(0, 120), texto: String(x.texto || '').slice(0, 1500) };
+    });
+    const t = String(titulo || '').slice(0, 200);
+    const m = db.addMensagem({ bot: bot.id, squad: bot.squad, sessao: bot.sessao, papel: 'quadro', texto: [t, ...lista.map((x) => `${x.titulo} ${x.nome}`)].join(' ').trim(), meta: { titulo: t, itens: lista } });
+    emitir('msg', m);
+    return `Quadro entregue no app: ${lista.length} itens.`;
+  },
+
+  async nuvem_enviar(bot, { caminho, pasta = '' }) {
+    if (!conectoresDoBot(bot).includes(nuvem.ID)) throw new Error('O conector Cloudflare R2 não está ligado para este bot (Conectores do squad).');
+    const r = await nuvem.enviar(caminho, { pasta });
+    const c = await nuvem.conferir(r.url);
+    const aviso = c.ok ? '' : ` ATENÇÃO: o link não abriu de fora (${c.status || c.erro}). Confira se o acesso público (r2.dev ou domínio) está ligado no bucket.`;
+    return `Enviado para o R2 (${(r.tamanho / 1e6).toFixed(1)} MB, ${r.tipo}). Link público: ${r.url}${aviso}`;
+  },
+
+  async kie_gerar(bot, { modelo, input = {}, nome = '' }) {
+    kieLigado(bot);
+    const taskId = await kie.criar(modelo, input);
+    return kieResposta(await kie.aguardar(taskId, { pasta: pastaKie(bot), nome }));
+  },
+  async kie_aguardar(bot, { taskId, nome = '' }) {
+    kieLigado(bot);
+    return kieResposta(await kie.aguardar(taskId, { pasta: pastaKie(bot), nome }));
+  },
+  async kie_creditos(bot) {
+    kieLigado(bot);
+    return `Créditos na kie.ai: ${await kie.creditos()}`;
+  },
+
+  demanda_etapa(bot, args) { return demandas.botAtualizar(bot, args || {}, registrarArquivo); },
+  demanda_ver(bot) { return demandas.botVer(bot); },
 
   async navegador_ligar(bot, { url = '' }) {
     const perfil = nav.perfilDoBot(bot);
@@ -363,6 +482,20 @@ const ferramentas = {
     return { espera: id };
   },
 };
+
+// Para o motor do ChatGPT (codex.js): abre a caixa "Confirmar exclusão" no app e espera a resposta do usuário.
+// true = ele confirmou. Sem resposta em 30 min, ou qualquer erro: false (nada é apagado).
+export async function pedirExclusao(bot, { ferramenta, entrada, resumo }) {
+  try {
+    const { espera } = ferramentas.aprovar(bot, { tool_name: ferramenta, input: entrada, tipo: 'exclusao', resumo });
+    for (;;) {
+      await new Promise((ok) => setTimeout(ok, 1000));
+      const e = consultarEspera(espera);
+      if (!e.pronto) continue;
+      try { return JSON.parse(e.texto).behavior === 'allow'; } catch { return false; }
+    }
+  } catch { return false; }
+}
 
 export async function chamar(bot, nome, args = {}) {
   const f = ferramentas[nome];

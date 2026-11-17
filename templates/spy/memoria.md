@@ -1,0 +1,5 @@
+- Busca boa: duas palavras com + (nicho + mercado). Três palavras costuma voltar vazio.
+- API oficial da Meta não serve (só cobre anúncio político): o coletor lê a página pública da Biblioteca.
+- A Meta bloqueia por ~20 min depois de uns 10 mil anúncios seguidos: o coletor para sozinho; espere ou siga pelo navegador do Claude Flow.
+- Só VSL e quiz entram; WhatsApp, loja e marca institucional saem.
+- Nada entra na aba Spy sem o OK do Daniel; monitoramento é do Gestor de projetos.

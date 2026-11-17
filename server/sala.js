@@ -4,7 +4,7 @@
 //   escolha aparece na sala ("Vai para @Editor: é edição"), para o usuário corrigir se quiser.
 // Cada bot recebe a mensagem no próprio chat (com a memória e as ferramentas dele) e a resposta final volta para a sala.
 import spawn from 'cross-spawn';
-import { HOME } from './config.js';
+import { HOME, config } from './config.js';
 import { squads, botsDoSquad, acharNoSquad } from './store.js';
 import * as db from './db.js';
 import * as mem from './memoria.js';
@@ -83,6 +83,11 @@ export async function enviar(squadId, { texto, anexos = [] }) {
   let escolha = mencoes(squadId, texto);
   let roteado = false;
   if (!escolha && bs.length === 1) escolha = { ids: [bs[0].id] };
+  // motor do ChatGPT: sem @, quem recebe é o Gestor de projetos (ou o líder do squad), que distribui
+  if (!escolha && (config.motor || 'claude') === 'codex') {
+    const g = bs.find((b) => b.template === 'gestor') || bs.find((b) => b.id === sq.lider);
+    if (g) { escolha = { ids: [g.id], motivo: 'ninguém citado: o gestor recebe e distribui' }; roteado = true; }
+  }
   if (!escolha) {
     emitir('sala', { squad: squadId, roteando: true });
     escolha = await rotear(squadId, texto);

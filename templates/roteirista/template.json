@@ -1,0 +1,133 @@
+{
+  "nome": "Roteirista",
+  "descricao": "Transforma um roteiro em vídeo animado estilo Pixar, com aprovação sua a cada etapa: personagens, roteiro em cenas, storyboard (imagens individuais em quadro), teste da cena 1, todas as cenas, troca de voz no ElevenLabs e vídeo final. Pensa no Claude e gera imagem e vídeo pela kie.ai com os seus créditos (vídeo padrão: Gemini Omni 1.2 Flash).",
+  "avatar": {
+    "planeta": "urano"
+  },
+  "ordem": 25,
+  "motor": "claude",
+  "modelo": "opus",
+  "esforco": "",
+  "autonomia": "total",
+  "navegador": "principal",
+  "conectores": [
+    "kie-ai",
+    "elevenlabs"
+  ],
+  "seletorMidia": [
+    "modeloVideo"
+  ],
+  "pastas": [
+    "~/Downloads"
+  ],
+  "env": {},
+  "preferencias": [
+    {
+      "chave": "estilo",
+      "rotulo": "Estilo visual (entra em todo prompt)",
+      "tipo": "texto",
+      "padrao": "Pixar-style 3D animation, Pixar art style: soft cinematic lighting, vibrant colors, expressive characters with big eyes, smooth stylized shapes, high detail"
+    },
+    {
+      "chave": "modeloVideo",
+      "rotulo": "IA de vídeo (kie.ai)",
+      "tipo": "escolha",
+      "opcoes": [
+        "Gemini Omni 1.2 Flash · google/gemini-omni-flash-1-2",
+        "Veo 3.1 Fast · veo-3-1 (veo3_fast)",
+        "Kling 3.0 · kling-3.0/video"
+      ],
+      "padrao": "Gemini Omni 1.2 Flash · google/gemini-omni-flash-1-2"
+    },
+    {
+      "chave": "modeloImagem",
+      "rotulo": "IA de imagem (kie.ai)",
+      "tipo": "escolha",
+      "opcoes": [
+        "Nano Banana Pro · nano-banana-pro",
+        "Seedream 5.5 · seedream/5-5-text-to-image",
+        "GPT Image 2 · gpt-image-2-text-to-image"
+      ],
+      "padrao": "Nano Banana Pro · nano-banana-pro"
+    },
+    {
+      "chave": "formato",
+      "rotulo": "Formato do vídeo",
+      "tipo": "escolha",
+      "opcoes": [
+        "9:16 (vertical)",
+        "16:9 (horizontal)",
+        "1:1 (quadrado)",
+        "4:5 (feed)"
+      ],
+      "padrao": "9:16 (vertical)"
+    },
+    {
+      "chave": "resolucao",
+      "rotulo": "Resolução dos vídeos",
+      "tipo": "escolha",
+      "opcoes": [
+        "720p",
+        "480p (mais rápido, para rascunho)"
+      ],
+      "padrao": "720p"
+    },
+    {
+      "chave": "vozFinal",
+      "rotulo": "Voz final",
+      "tipo": "escolha",
+      "opcoes": [
+        "eu escolho a voz do ElevenLabs em cada projeto",
+        "manter a voz gerada no vídeo (sem troca)"
+      ],
+      "padrao": "eu escolho a voz do ElevenLabs em cada projeto"
+    },
+    {
+      "chave": "legenda",
+      "rotulo": "Legenda no vídeo final",
+      "tipo": "escolha",
+      "opcoes": [
+        "sem legenda",
+        "com legenda queimada"
+      ],
+      "padrao": "sem legenda"
+    }
+  ],
+  "demandas": [
+    {
+      "nome": "Novo roteiro",
+      "descricao": "Roteiro vira vídeo animado estilo Pixar, aprovando etapa por etapa.",
+      "instrucao": "Siga as etapas da sua instrução (seção \"As etapas\"). Cada etapa vai para o cartão da demanda com demanda_etapa.",
+      "etapas": [
+        {
+          "nome": "Personagens",
+          "instrucao": "Etapa 1 da sua instrução: ficha fixa + imagem de referência de cada personagem. No cartão: um item por personagem (imagem + resumo da ficha em português). Se o roteiro já trouxer os personagens definidos, siga o que veio; se não precisar desta etapa, marque como pulada dizendo o motivo."
+        },
+        {
+          "nome": "Cenas",
+          "instrucao": "Etapa 2: roteiro dividido em cenas (cada uma cabe num clipe só do modelo de vídeo escolhido: até 15 s no Omni e no Kling, até 8 s no Veo). No cartão, texto com uma tabela ou lista numerada: cena, duração, personagens, lugar, ação e a fala exata."
+        },
+        {
+          "nome": "Storyboard",
+          "instrucao": "Etapa 3: uma imagem individual por cena. No cartão, um item por cena (\"Cena N\" + a ação em uma linha)."
+        },
+        {
+          "nome": "Teste da cena 1",
+          "instrucao": "Etapa 4: só o vídeo da cena 1, conferido. No cartão: o vídeo como item e, no texto, duração e o que conferiu."
+        },
+        {
+          "nome": "Todas as cenas",
+          "instrucao": "Etapa 5: os vídeos das outras cenas (atualize o cartão com progresso \"cena N de M\"). No fim, todos os vídeos como itens, na ordem."
+        },
+        {
+          "nome": "Voz",
+          "instrucao": "Etapa 6: pergunte no texto do cartão (status aguardando) qual voz do ElevenLabs para cada personagem, listando opções. Com a resposta, converta 1 cena e mostre; depois as outras. Se a preferência for manter a voz gerada no vídeo, marque como pulada."
+        },
+        {
+          "nome": "Vídeo final",
+          "instrucao": "Etapa 7: monte o vídeo final e ponha como item no cartão, com duração total no texto."
+        }
+      ]
+    }
+  ]
+}

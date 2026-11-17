@@ -1,0 +1,2 @@
+- Pedido do Daniel (no chat, na tarefa ou no roteiro) vale mais que a regra padrão do bot: não corrijo o que ele mandou fazer diferente.
+- Correção sempre com na_frente=true, para entrar antes do próximo trabalho do bot.
